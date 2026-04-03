@@ -10,6 +10,11 @@ RUN pip install --no-cache-dir --prefix=/install -r requirements.txt
 
 FROM python:3.12-slim
 
+# Runtime dependency for secp256k1 Python bindings
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    libsecp256k1-1 \
+    && rm -rf /var/lib/apt/lists/*
+
 WORKDIR /app
 
 COPY --from=builder /install /usr/local
