@@ -1,0 +1,11 @@
+.venv/
+__pycache__/
+*.pyc
+tests/
+umbrel/
+.git/
+.gitignore
+.dockerignore
+CLAUDE.md
+*.db
+.DS_Store

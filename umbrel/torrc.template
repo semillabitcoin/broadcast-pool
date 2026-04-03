@@ -1,0 +1,4 @@
+# Electrum proxy — accessible remotely via Tor
+# Sparrow/Liana can connect to <onion>:50005
+HiddenServiceDir /var/lib/tor/app-broadcast-pool-proxy
+HiddenServicePort 50005 10.21.21.11:50005

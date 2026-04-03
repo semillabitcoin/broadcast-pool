@@ -1,0 +1,53 @@
+manifestVersion: 1.1
+id: broadcast-pool
+name: Broadcast Pool
+tagline: Proxy Electrum con broadcast programado de transacciones Bitcoin
+category: bitcoin
+version: "1.0.0"
+port: 3080
+description: >-
+  Intercepta broadcasts de transacciones desde Sparrow, Liana u otra wallet
+  compatible con Electrum y los retiene hasta el bloque objetivo que configures.
+  Tus wallets ven las transacciones como pendientes en mempool mientras el proxy
+  las guarda localmente. Ideal para migracion de wallets y ciclado de UTXOs
+  con separacion temporal.
+
+  Compatible con Electrs y Fulcrum. Soporta mainnet, testnet y signet.
+  Selector de upstream configurable desde la interfaz.
+
+  Inspirado en la propuesta Broadcast Pool de Craig Raw (bitcoin/bitcoin#30471).
+developer: Semilla Bitcoin
+website: https://semillabitcoin.com
+support: https://github.com/semillabitcoin/broadcast-pool/issues
+repo: https://github.com/semillabitcoin/broadcast-pool
+gallery: []
+releaseNotes: ""
+dependencies:
+  - electrs
+defaultUsername: ""
+defaultPassword: ""
+deterministicPassword: false
+path: "/"
+torOnly: true
+submitter: Semilla Bitcoin
+submission: ""
+widgets:
+  - id: "pool-stats"
+    type: "four-stats"
+    refresh: "30s"
+    endpoint: "app:3080/api/widget/stats"
+    example:
+      type: "four-stats"
+      items:
+        - title: "Retenidas"
+          text: "3"
+          subtext: "transacciones"
+        - title: "Programadas"
+          text: "2"
+          subtext: "con bloque"
+        - title: "Altura"
+          text: "895,150"
+          subtext: "actual"
+        - title: "Conexiones"
+          text: "1"
+          subtext: "wallets"

@@ -1,0 +1,26 @@
+version: "3.7"
+
+services:
+  app_proxy:
+    environment:
+      APP_HOST: broadcast-pool_server_1
+      APP_PORT: 3080
+
+  server:
+    image: semillabitcoin/broadcast-pool:v1.0.0@sha256:DIGEST_PLACEHOLDER
+    user: "1000:1000"
+    restart: on-failure
+    stop_grace_period: 1m
+    ports:
+      - "50005:50005"
+    volumes:
+      - ${APP_DATA_DIR}/data:/data
+    environment:
+      ELECTRUM_HOST: ${APP_ELECTRS_NODE_IP}
+      ELECTRUM_PORT: ${APP_ELECTRS_NODE_PORT}
+      DB_PATH: /data/pool.db
+      WEB_PORT: "3080"
+      PROXY_PORT: "50005"
+    networks:
+      default:
+        ipv4_address: 10.21.21.11

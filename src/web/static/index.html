@@ -1,0 +1,282 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Broadcast Pool</title>
+  <link rel="icon" type="image/png" href="/static/favicon.png">
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+  <div style="display:flex; justify-content:space-between; align-items:baseline;">
+    <div>
+      <h1 id="page-title">Broadcast Pool</h1>
+      <p class="subtitle" id="page-subtitle">Proxy Electrum con broadcast programado de transacciones - umbrel.local:50005</p>
+    </div>
+    <div style="display:flex;gap:8px;align-items:center;">
+      <button class="small secondary" id="unit-btn" onclick="toggleUnit()" style="font-size:12px;padding:4px 10px;">sats</button>
+      <button class="small secondary" id="lang-btn" onclick="toggleLang()" style="font-size:12px;padding:4px 10px;">EN</button>
+    </div>
+  </div>
+
+  <!-- Tab Navigation -->
+  <div class="tab-bar">
+    <button class="tab-btn active" data-tab="pool" onclick="switchTab('pool')" id="tab-btn-pool">Pool</button>
+    <button class="tab-btn" data-tab="settings" onclick="switchTab('settings')" id="tab-btn-settings">Ajustes</button>
+    <button class="tab-btn" data-tab="vault" onclick="switchTab('vault')" id="tab-btn-vault" style="display:none">Bóveda</button>
+  </div>
+
+  <!-- ===================== POOL TAB ===================== -->
+  <div id="tab-pool" class="tab-content active">
+    <div id="alert-conflict" class="alert alert-danger"></div>
+    <div id="alert-warning" class="alert alert-warning"></div>
+
+    <div class="status-bar">
+      <div class="status-item">
+        <span class="status-label" id="lbl-net">Red</span>
+        <span class="status-value" id="s-network">--</span>
+      </div>
+      <div class="status-item">
+        <span class="status-label" id="lbl-height">Altura</span>
+        <span class="status-value" id="s-height">--</span>
+      </div>
+      <div class="status-item">
+        <span class="status-label" id="lbl-mtp" title="">MTP</span>
+        <span class="status-value" style="font-size:14px" id="s-mtp">--</span>
+      </div>
+      <div class="status-item">
+        <span class="status-label" id="lbl-retained">Retenidas</span>
+        <span class="status-value" id="s-retained">0</span>
+      </div>
+      <div class="status-item">
+        <span class="status-label" id="lbl-scheduled">Programadas</span>
+        <span class="status-value" id="s-scheduled">0</span>
+      </div>
+      <div class="status-item">
+        <span class="status-label" id="lbl-connections">Conexiones</span>
+        <span class="status-value" id="s-connections">0</span>
+      </div>
+      <div class="status-item" style="margin-left:auto">
+        <span class="status-label" id="lbl-upstream">Upstream</span>
+        <span class="status-value" style="font-size:14px">
+          <span id="s-upstream">--</span>
+        </span>
+      </div>
+    </div>
+
+    <div class="actions-bar">
+      <span id="lbl-aa-prefix" style="font-size:13px;color:var(--text-muted)">Retransmitir pendientes desde bloque</span>
+      <input type="number" id="aa-base" placeholder="--" style="width:100px">
+      <span id="lbl-aa-gap" style="font-size:13px;color:var(--text-muted)">con</span>
+      <input type="number" id="aa-offset" placeholder="1" value="1" style="width:60px">
+      <span id="lbl-aa-suffix" style="font-size:13px;color:var(--text-muted)">bloques entre cada tx</span>
+      <button class="secondary" id="btn-assign" onclick="autoAssign()">Asignar</button>
+      <span style="flex:1"></span>
+      <button class="secondary" id="btn-rescan" onclick="rescanAll()" title="">&#8635;</button>
+      <button id="btn-import" onclick="toggleImport()">Importar TX</button>
+    </div>
+
+    <div id="import-panel" class="alert" style="display:none; background:var(--bg-card); border:1px solid var(--border); color:var(--text);">
+      <div style="display:flex; flex-direction:column; gap:8px;">
+        <label style="font-size:13px; color:var(--text-muted);" id="import-label-text">Pega el hex de una transaccion firmada:</label>
+        <textarea id="import-hex" rows="3" style="background:var(--bg); border:1px solid var(--border); color:var(--text); padding:8px; border-radius:6px; font-family:'SF Mono','Fira Code',monospace; font-size:12px; resize:vertical;" placeholder="0200000001..."></textarea>
+        <div style="display:flex; gap:8px; align-items:center;">
+          <label style="font-size:13px; color:var(--text-muted);" id="import-wallet-label">Wallet:</label>
+          <select id="import-wallet" class="inline-edit" style="width:140px;padding:6px 8px">
+            <option value="Sparrow">Sparrow</option>
+            <option value="Liana">Liana</option>
+            <option value="Nunchuk">Nunchuk</option>
+            <option value="Electrum">Electrum</option>
+            <option value="Bitcoin Core">Bitcoin Core</option>
+            <option value="Otro" id="opt-other">Otro</option>
+          </select>
+          <button id="btn-do-import" onclick="importTx()">Importar</button>
+          <button class="secondary" id="btn-cancel-import" onclick="toggleImport()">Cancelar</button>
+          <span id="import-msg" style="font-size:13px;"></span>
+        </div>
+      </div>
+    </div>
+
+    <div id="tx-container">
+      <div class="empty-state" id="empty-state">
+        <h2 id="empty-title">Sin transacciones</h2>
+        <p id="empty-desc">Conecta Sparrow o Liana a umbrel.local:50005 y envia una transaccion</p>
+      </div>
+    </div>
+
+    <table class="tx-table" id="tx-table" style="display:none">
+      <thead>
+        <tr>
+          <th class="sortable col-txid" onclick="sortBy('created_at')" id="th-txid">TxID <span class="sort-arrow" id="sort-created_at"></span></th>
+          <th class="sortable col-type" onclick="sortBy('tx_tags')" id="th-type">Tipo <span class="sort-arrow" id="sort-tx_tags"></span></th>
+          <th class="sortable col-wallet" onclick="sortBy('wallet_label')" id="th-wallet">Wallet <span class="sort-arrow" id="sort-wallet_label"></span></th>
+          <th class="sortable col-amount" onclick="sortBy('amount_sats')" id="th-amount">Monto <span class="sort-arrow" id="sort-amount_sats"></span></th>
+          <th class="sortable col-feerate" onclick="sortBy('fee_rate')" id="th-feerate">Fee rate <span class="sort-arrow" id="sort-fee_rate"></span></th>
+          <th class="sortable col-age" onclick="sortBy('oldest_coin_age')" id="th-coinage">Edad moneda <span class="sort-arrow" id="sort-oldest_coin_age"></span></th>
+          <th class="sortable col-status" onclick="sortBy('status')" id="th-status">Estado <span class="sort-arrow" id="sort-status"></span></th>
+          <th class="sortable col-target" onclick="sortBy('target_block')" id="th-target" title="">Retransmitir en <span class="sort-arrow" id="sort-target_block"></span></th>
+          <th class="col-actions" id="th-actions" style="text-align:center">Acciones</th>
+        </tr>
+      </thead>
+      <tbody id="tx-body"></tbody>
+    </table>
+
+    <div id="confirmed-section" style="display:none; margin-top:32px;">
+      <div style="display:flex; align-items:center; margin-bottom:12px;">
+        <h2 style="font-size:16px; color:var(--text-muted); cursor:pointer; user-select:none; margin:0;" id="confirmed-heading" onclick="toggleHistory()">
+          <span id="history-arrow" class="history-arrow">›</span> <span id="history-title">Historial</span>
+        </h2>
+        <div id="hist-filters" style="display:none; margin-left:auto; gap:8px; align-items:center; flex-wrap:wrap;">
+          <select id="hist-filter-type" class="inline-edit" style="width:auto;padding:4px 8px;font-size:12px" onchange="refresh()">
+            <option value="" id="hf-all-types">Todos los tipos</option>
+            <option value="barrido">barrido</option>
+            <option value="consolidacion">cons.</option>
+            <option value="pago">pago</option>
+            <option value="lotes">lotes</option>
+          </select>
+          <select id="hist-filter-wallet" class="inline-edit" style="width:auto;padding:4px 8px;font-size:12px" onchange="refresh()">
+            <option value="" id="hf-all-wallets">Todas las wallets</option>
+          </select>
+          <select id="hist-filter-status" class="inline-edit" style="width:auto;padding:4px 8px;font-size:12px" onchange="refresh()">
+            <option value="" id="hf-all-status">Todos los estados</option>
+            <option value="confirmed" id="hf-confirmed">confirmada</option>
+            <option value="abandoned" id="hf-abandoned">abandonada</option>
+            <option value="replaced" id="hf-replaced">reemplazada</option>
+          </select>
+        </div>
+      </div>
+      <table class="tx-table" id="confirmed-table" style="display:table;">
+        <thead>
+          <tr>
+            <th class="col-txid sortable" onclick="sortHistBy('created_at')">TxID <span class="sort-arrow" id="hsort-created_at"></span></th>
+            <th class="col-type sortable" onclick="sortHistBy('tx_tags')">Tipo <span class="sort-arrow" id="hsort-tx_tags"></span></th>
+            <th class="col-wallet sortable" onclick="sortHistBy('wallet_label')">Wallet <span class="sort-arrow" id="hsort-wallet_label"></span></th>
+            <th class="col-amount sortable" onclick="sortHistBy('amount_sats')">Monto <span class="sort-arrow" id="hsort-amount_sats"></span></th>
+            <th class="col-feerate sortable" onclick="sortHistBy('fee_rate')">Fee rate <span class="sort-arrow" id="hsort-fee_rate"></span></th>
+            <th class="col-age sortable" onclick="sortHistBy('fee_sats')">Fee total <span class="sort-arrow" id="hsort-fee_sats"></span></th>
+            <th class="col-status sortable" onclick="sortHistBy('status')">Estado <span class="sort-arrow" id="hsort-status"></span></th>
+            <th class="col-target sortable" onclick="sortHistBy('confirmed_block')" id="th-conf-block">Confirmada <span class="sort-arrow" id="hsort-confirmed_block"></span></th>
+            <th class="col-actions">Delta</th>
+          </tr>
+        </thead>
+        <tbody id="confirmed-body"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- ===================== SETTINGS TAB ===================== -->
+  <div id="tab-settings" class="tab-content">
+    <div class="settings-section">
+      <h3 class="settings-title" id="set-title-upstream">Conexión a servidor Electrum</h3>
+      <div id="discovered-servers" style="margin-bottom:12px;"></div>
+      <div class="settings-row">
+        <label class="settings-label">Host</label>
+        <input type="text" id="set-host" class="inline-edit" style="width:220px" placeholder="10.21.21.10">
+      </div>
+      <div class="settings-row">
+        <label class="settings-label" id="set-lbl-port">Puerto</label>
+        <input type="number" id="set-port" class="inline-edit" style="width:100px" placeholder="50001">
+        <label class="settings-label" style="margin-left:16px; display:flex; align-items:center; gap:4px;">
+          <input type="checkbox" id="set-ssl"> SSL
+        </label>
+      </div>
+      <div class="settings-row">
+        <button class="small secondary" onclick="testUpstreamConnection()" id="btn-test-conn">Verificar conexión</button>
+        <span id="upstream-status" style="margin-left:12px;font-size:13px;color:var(--text-muted)"></span>
+      </div>
+    </div>
+
+    <div class="settings-section">
+      <h3 class="settings-title" id="set-title-vault">Bóveda cifrada (Nostr)</h3>
+      <p class="settings-help" id="set-npub-help">Si configuras una npub, las transacciones confirmadas se almacenarán cifradas en una bóveda privada antes de purgarlas.</p>
+      <p class="settings-help" id="set-npub-help2">Solo tú puedes descifrarlas con Alby, Nos2x u otra extensión de navegador NIP-07.</p>
+      <div class="settings-row">
+        <label class="settings-label">npub</label>
+        <input type="text" id="set-npub" class="inline-edit" style="width:100%;max-width:500px;font-family:'SF Mono','Fira Code',monospace;font-size:12px" placeholder="npub1...">
+        <button class="small secondary" id="btn-npub-change" onclick="unlockNpubField()" style="display:none;margin-left:8px;font-size:11px">Cambiar</button>
+      </div>
+      <p class="settings-help" id="set-npub-warn" style="margin-top:4px"></p>
+    </div>
+
+    <div class="settings-section">
+      <h3 class="settings-title" id="set-title-prefs">Preferencias</h3>
+      <div class="settings-row">
+        <label class="settings-label" id="set-lbl-lang">Idioma</label>
+        <select id="set-lang" class="inline-edit" style="width:120px;padding:6px 8px">
+          <option value="es">Español</option>
+          <option value="en">English</option>
+        </select>
+      </div>
+      <div class="settings-row">
+        <label class="settings-label" id="set-lbl-unit">Unidad</label>
+        <select id="set-unit" class="inline-edit" style="width:120px;padding:6px 8px">
+          <option value="btc">BTC</option>
+          <option value="sats">sats</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="settings-actions">
+      <button onclick="saveAllSettings()" id="btn-save-settings">Guardar</button>
+      <span id="settings-msg" style="font-size:13px; color:var(--green); margin-left:12px;"></span>
+    </div>
+  </div>
+
+  <!-- ===================== VAULT TAB ===================== -->
+  <div id="tab-vault" class="tab-content">
+    <div id="vault-no-npub" class="empty-state">
+      <h2 id="vault-no-npub-title">Configura tu npub</h2>
+      <p id="vault-no-npub-desc">Ve a Ajustes y pega tu npub para activar la bóveda cifrada</p>
+    </div>
+
+    <div id="vault-no-extension" class="empty-state" style="display:none">
+      <h2 id="vault-no-ext-title">Extensión NIP-07 requerida</h2>
+      <p id="vault-no-ext-desc">Instala Alby o nos2x para descifrar la bóveda</p>
+    </div>
+
+    <div id="vault-content" style="display:none">
+      <div style="display:flex; align-items:center; margin-bottom:16px;">
+        <button class="vault-lock-btn" id="vault-lock-btn" onclick="loadVault()" title="">&#128274;</button>
+        <span id="vault-status" style="font-size:13px; color:var(--text-muted); margin-left:12px;"></span>
+        <div style="margin-left:auto; display:flex; gap:8px; align-items:center;">
+          <select id="vault-filter-type" class="inline-edit" style="width:auto;padding:4px 8px;font-size:12px" onchange="renderVaultTable()">
+            <option value="">Todos los tipos</option>
+            <option value="barrido">barrido</option>
+            <option value="consolidacion">cons.</option>
+            <option value="pago">pago</option>
+            <option value="lotes">lotes</option>
+          </select>
+          <select id="vault-filter-wallet" class="inline-edit" style="width:auto;padding:4px 8px;font-size:12px" onchange="renderVaultTable()">
+            <option value="">Todas las wallets</option>
+          </select>
+        </div>
+      </div>
+
+      <table class="tx-table" id="vault-table">
+        <thead>
+          <tr>
+            <th class="col-txid sortable" onclick="sortVaultBy('txid')">TxID</th>
+            <th class="col-type sortable" onclick="sortVaultBy('tx_type')">Tipo</th>
+            <th class="col-wallet sortable" onclick="sortVaultBy('wallet')">Wallet</th>
+            <th class="col-amount sortable" onclick="sortVaultBy('amount_sats')">Monto</th>
+            <th class="col-feerate sortable" onclick="sortVaultBy('fee_rate')">Fee rate</th>
+            <th class="col-age sortable" onclick="sortVaultBy('fee_sats')">Fee total</th>
+            <th class="col-status sortable" onclick="sortVaultBy('status')">Estado</th>
+            <th class="col-target sortable" onclick="sortVaultBy('confirmed_block')">Confirmada</th>
+            <th class="col-actions">Delta</th>
+          </tr>
+        </thead>
+        <tbody id="vault-body"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- ===================== FOOTER ===================== -->
+  <footer class="bp-footer">
+    <p id="footer-inspired"></p>
+    <p id="footer-made"></p>
+  </footer>
+
+  <script src="/static/app.js"></script>
+</body>
+</html>
