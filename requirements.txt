@@ -1,4 +1,4 @@
 aiohttp==3.11.14
-secp256k1>=0.14.0
+coincurve>=21.0.0
 pycryptodome>=3.20.0
 bech32>=1.2.0
