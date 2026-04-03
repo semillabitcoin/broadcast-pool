@@ -511,14 +511,29 @@ async function copyTx(txid, status) {
     label = t('hexCopied');
   }
 
-  navigator.clipboard.writeText(text).then(() => {
+  // Fallback for non-HTTPS contexts (Umbrel via Tailscale)
+  try {
+    if (navigator.clipboard && window.isSecureContext) {
+      await navigator.clipboard.writeText(text);
+    } else {
+      const ta = document.createElement('textarea');
+      ta.value = text;
+      ta.style.position = 'fixed';
+      ta.style.opacity = '0';
+      document.body.appendChild(ta);
+      ta.select();
+      document.execCommand('copy');
+      document.body.removeChild(ta);
+    }
     const el = document.querySelector(`[onclick*="${txid}"]`);
     if (el) {
       const orig = el.textContent;
       el.textContent = label;
       setTimeout(() => { el.textContent = orig; }, 800);
     }
-  });
+  } catch (e) {
+    console.warn('Copy failed:', e);
+  }
 }
 
 function escapeHTML(str) {
@@ -1167,12 +1182,8 @@ async function testUpstreamConnection() {
     });
 
     if (result.ok) {
-      // Get network name from a quick status check
-      let netName = '';
-      try {
-        const s = await fetchJSON('/api/status');
-        netName = s.network ? ' — ' + s.network.charAt(0).toUpperCase() + s.network.slice(1) : '';
-      } catch {}
+      const netName = result.network && result.network !== 'unknown'
+        ? ' — ' + result.network.charAt(0).toUpperCase() + result.network.slice(1) : '';
       el.textContent = (lang === 'es' ? 'Conectado' : 'Connected') + netName;
       el.style.color = 'var(--green)';
     } else {

@@ -726,18 +726,40 @@ async def handle_test_connection(request: web.Request) -> web.Response:
             timeout=5.0,
         )
 
+        # Handshake
         req = jsonlib.dumps({"jsonrpc": "2.0", "method": "server.version", "params": ["bp-test", "1.4"], "id": 1}) + "\n"
         writer.write(req.encode())
         await writer.drain()
         line = await aio.wait_for(reader.readline(), timeout=5.0)
+        resp = jsonlib.loads(line)
+
+        if "result" not in resp:
+            writer.close()
+            return web.json_response({"ok": False, "error": str(resp.get("error", "Unknown"))})
+
+        server_name = resp["result"][0] if isinstance(resp["result"], list) else str(resp["result"])
+
+        # Detect network via genesis block header
+        import hashlib
+        req2 = jsonlib.dumps({"jsonrpc": "2.0", "method": "blockchain.block.header", "params": [0], "id": 2}) + "\n"
+        writer.write(req2.encode())
+        await writer.drain()
+        line2 = await aio.wait_for(reader.readline(), timeout=5.0)
         writer.close()
 
-        resp = jsonlib.loads(line)
-        if "result" in resp:
-            server_name = resp["result"][0] if isinstance(resp["result"], list) else str(resp["result"])
-            return web.json_response({"ok": True, "server": server_name})
-        elif "error" in resp:
-            return web.json_response({"ok": False, "error": str(resp["error"])})
+        network = "unknown"
+        try:
+            resp2 = jsonlib.loads(line2)
+            header_hex = resp2.get("result", "")
+            if header_hex:
+                header_bytes = bytes.fromhex(header_hex)
+                block_hash = hashlib.sha256(hashlib.sha256(header_bytes).digest()).digest()[::-1].hex()
+                from src import config
+                network = config.GENESIS_HASHES.get(block_hash, "unknown")
+        except Exception:
+            pass
+
+        return web.json_response({"ok": True, "server": server_name, "network": network})
         else:
             return web.json_response({"ok": False, "error": "Unexpected response"})
 
