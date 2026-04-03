@@ -11,7 +11,7 @@ from src.pool.store import TxStore
 
 log = logging.getLogger(__name__)
 
-AUTH_TOKEN = os.environ.get("APP_PASSWORD", os.environ.get("BP_AUTH_TOKEN", ""))
+AUTH_TOKEN = os.environ.get("BP_AUTH_TOKEN", "")  # Only activate if explicitly set, not APP_PASSWORD (Umbrel app_proxy handles auth)
 
 
 def _validate_upstream(host: str, port: int) -> str | None:
