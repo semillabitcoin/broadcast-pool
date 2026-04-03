@@ -12,7 +12,7 @@ FROM python:3.12-slim
 
 # Runtime dependency for secp256k1 Python bindings
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    libsecp256k1-1 \
+    libsecp256k1-0 \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
