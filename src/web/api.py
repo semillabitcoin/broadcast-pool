@@ -629,6 +629,11 @@ async def handle_set_settings(request: web.Request) -> web.Response:
         return web.json_response({"error": err}, status=400)
 
     store.set_upstream(host, port, use_ssl=bool(use_ssl))
+    log.info("Settings saved: upstream=%s:%d ssl=%s", host, port, use_ssl)
+
+    # Verify it was saved
+    saved_host, saved_port, saved_ssl = store.get_upstream()
+    log.info("Settings verified: upstream=%s:%d ssl=%s", saved_host, saved_port, saved_ssl)
 
     # Handle npub
     if "npub" in body:

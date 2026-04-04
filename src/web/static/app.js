@@ -1250,6 +1250,12 @@ async function saveAllSettings() {
   const newLang = document.getElementById('set-lang').value;
   const newUnit = document.getElementById('set-unit').value;
 
+  if (!host || !port || isNaN(port)) {
+    document.getElementById('settings-msg').textContent = lang === 'es' ? 'Host y puerto requeridos' : 'Host and port required';
+    document.getElementById('settings-msg').style.color = 'var(--red)';
+    return;
+  }
+
   // Save upstream + npub to server
   const result = await fetchJSON('/api/settings', {
     method: 'POST',
@@ -1262,6 +1268,9 @@ async function saveAllSettings() {
     document.getElementById('settings-msg').style.color = 'var(--red)';
     return;
   }
+
+  // Show what was saved
+  console.log('Settings saved:', result);
 
   // Save preferences locally
   if (newLang !== lang) {
@@ -1296,9 +1305,9 @@ async function saveAllSettings() {
     document.getElementById('btn-npub-change').style.display = 'none';
   }
 
-  document.getElementById('settings-msg').textContent = t('saved');
+  document.getElementById('settings-msg').textContent = t('saved') + ' — ' + host + ':' + port + (useSsl ? ' (SSL)' : '');
   document.getElementById('settings-msg').style.color = 'var(--green)';
-  setTimeout(() => { document.getElementById('settings-msg').textContent = ''; }, 2000);
+  setTimeout(() => { document.getElementById('settings-msg').textContent = ''; }, 4000);
 }
 
 // --- Vault tab ---

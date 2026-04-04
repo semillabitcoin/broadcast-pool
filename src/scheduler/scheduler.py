@@ -24,6 +24,7 @@ class Scheduler:
         self.notify_callback = notify_callback  # async fn(set[str]) to notify sessions
         self._upstream: UpstreamConnection | None = None
         self._running = False
+        self._reconnect_event = asyncio.Event()
 
     async def start(self) -> None:
         self._running = True
@@ -47,10 +48,10 @@ class Scheduler:
     async def reconnect(self) -> None:
         """Disconnect and reconnect to (possibly new) upstream."""
         log.info("Scheduler reconnecting to new upstream...")
+        self._reconnect_event.set()
         if self._upstream:
             await self._upstream.close()
             self._upstream = None
-        # The main loop in start() will catch the broken connection and reconnect
 
     async def broadcast_now(self, txid: str) -> dict:
         """Immediately broadcast a retained transaction. Returns result dict."""
@@ -106,9 +107,14 @@ class Scheduler:
         # Set up notification handler for new blocks
         self._upstream.set_notification_callback(self._handle_notification)
 
-        # Keep alive
+        # Keep alive — break immediately on reconnect request
+        self._reconnect_event.clear()
         while self._running:
-            await asyncio.sleep(30)
+            try:
+                await asyncio.wait_for(self._reconnect_event.wait(), timeout=30)
+                break  # Reconnect requested
+            except asyncio.TimeoutError:
+                pass  # Normal timeout, do ping
             try:
                 await self._upstream.call("server.ping")
             except Exception:
