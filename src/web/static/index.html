@@ -68,7 +68,7 @@
       <span id="lbl-aa-prefix" style="font-size:13px;color:var(--text-muted)">Retransmitir pendientes desde bloque</span>
       <input type="number" id="aa-base" placeholder="--" style="width:100px">
       <span id="lbl-aa-gap" style="font-size:13px;color:var(--text-muted)">con</span>
-      <input type="number" id="aa-offset" placeholder="1" value="1" style="width:60px">
+      <input type="number" id="aa-offset" placeholder="1" value="1" style="width:60px" oninput="updateAaSuffix()">
       <span id="lbl-aa-suffix" style="font-size:13px;color:var(--text-muted)">bloques entre cada tx</span>
       <button class="secondary" id="btn-assign" onclick="autoAssign()">Asignar</button>
       <span style="flex:1"></span>

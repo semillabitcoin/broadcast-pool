@@ -18,7 +18,7 @@ const i18n = {
     scheduled: 'Programadas', connections: 'Conexiones', upstream: 'Upstream',
     change: 'Cambiar', host: 'Host', port: 'Puerto', connect: 'Conectar',
     cancel: 'Cancelar', reconnecting: 'Reconectando...',
-    aaPrefix: 'Auto agenda transacciones pendientes a la altura de bloque', aaGap: 'y con', aaSuffix: 'bloques entre cada transacci\u00f3n',
+    aaPrefix: 'Auto agenda transacciones pendientes a la altura de bloque', aaGap: 'y con', aaSuffix1: 'bloque entre cada transacci\u00f3n', aaSuffixN: 'bloques entre cada transacci\u00f3n',
     assign: 'Agendar', importTx: 'Importar TX',
     pasteHex: 'Pega el hex de una transaccion firmada',
     wallet: 'Wallet', import_btn: 'Importar', importing: 'Importando...',
@@ -65,7 +65,7 @@ const i18n = {
     scheduled: 'Scheduled', connections: 'Connections', upstream: 'Upstream',
     change: 'Change', host: 'Host', port: 'Port', connect: 'Connect',
     cancel: 'Cancel', reconnecting: 'Reconnecting...',
-    aaPrefix: 'Schedule pending transactions at blockheight', aaGap: 'with', aaSuffix: 'blocks between each tx',
+    aaPrefix: 'Schedule pending transactions at blockheight', aaGap: 'with', aaSuffix1: 'block between each tx', aaSuffixN: 'blocks between each tx',
     assign: 'Assign', importTx: 'Import TX',
     pasteHex: 'Paste the hex of a signed transaction',
     wallet: 'Wallet', import_btn: 'Import', importing: 'Importing...',
@@ -157,7 +157,7 @@ function applyLang() {
 
   document.getElementById('lbl-aa-prefix').textContent = t('aaPrefix');
   document.getElementById('lbl-aa-gap').textContent = t('aaGap');
-  document.getElementById('lbl-aa-suffix').textContent = t('aaSuffix');
+  updateAaSuffix();
   document.getElementById('btn-assign').textContent = t('assign');
 
   document.getElementById('import-label-text').textContent = t('pasteHex') + ':';
@@ -1242,6 +1242,11 @@ function unlockNpubField() {
   npubInput.focus();
   npubChangeBtn.style.display = 'none';
   npubInput._vaultCleared = true; // flag to clear vault on save
+}
+
+function updateAaSuffix() {
+  const val = parseInt(document.getElementById('aa-offset').value) || 0;
+  document.getElementById('lbl-aa-suffix').textContent = val === 1 ? t('aaSuffix1') : t('aaSuffixN');
 }
 
 function selectUpstream(host, port, ssl) {
