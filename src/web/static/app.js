@@ -48,6 +48,20 @@ const i18n = {
     setNpubWarn: 'Nota: valora no usar tu npub principal. Usa un npub burner que no asocie tu nym a la actividad de tx bitcoin.',
     testConn: 'Verificar conexi\u00f3n',
     save: 'Guardar', saved: 'Guardado',
+    manualConn: 'Conexi\u00f3n manual',
+    connecting: 'Conectando...', connected: 'Conectado',
+    connectBtn: 'Conectar', useServer: 'Usar este servidor',
+    currentUpstream: 'Conectado a:', noServers: 'No se detectaron servidores Electrum en la red local',
+    searchingServers: 'Buscando servidores Electrum locales...',
+    localServers: 'Servidores Electrum locales encontrados:',
+    hostPortRequired: 'Introduce host y puerto',
+    checking: 'Verificando...', disconnected: 'Sin conexi\u00f3n',
+    npubSaved: 'npub guardada', npubCleared: 'npub eliminada',
+    saveNpub: 'Guardar',
+    setConnect: 'C\u00f3mo conectar tu wallet',
+    connectDesc: 'Configura tu wallet para usar Broadcast Pool como servidor Electrum. Las transacciones se retendr\u00e1n hasta que las programes.',
+    connectLan: 'Red local',
+    copied: 'copiado',
     vaultNoNpub: 'Configura tu npub', vaultNoNpubDesc: 'Ve a Ajustes y pega tu npub para activar la b\u00f3veda cifrada',
     vaultNoExt: 'Extensi\u00f3n NIP-07 requerida', vaultNoExtDesc: 'Instala Alby o nos2x para descifrar la b\u00f3veda',
     vaultDecrypting: 'Descifrando...', vaultDecrypted: 'entradas descifradas',
@@ -95,6 +109,20 @@ const i18n = {
     setNpubWarn: 'Note: consider not using your main npub. Use a burner npub that doesn\'t link your nym to Bitcoin tx activity.',
     testConn: 'Test connection',
     save: 'Save', saved: 'Saved',
+    manualConn: 'Manual connection',
+    connecting: 'Connecting...', connected: 'Connected',
+    connectBtn: 'Connect', useServer: 'Use this server',
+    currentUpstream: 'Connected to:', noServers: 'No Electrum servers detected on local network',
+    searchingServers: 'Discovering local Electrum servers...',
+    localServers: 'Local Electrum servers found:',
+    hostPortRequired: 'Enter host and port',
+    checking: 'Checking...', disconnected: 'Disconnected',
+    npubSaved: 'npub saved', npubCleared: 'npub cleared',
+    saveNpub: 'Save',
+    setConnect: 'How to connect your wallet',
+    connectDesc: 'Set up your wallet to use Broadcast Pool as its Electrum server. Transactions will be retained until you schedule them.',
+    connectLan: 'Local network',
+    copied: 'copied',
     vaultNoNpub: 'Set up your npub', vaultNoNpubDesc: 'Go to Settings and paste your npub to enable the encrypted vault',
     vaultNoExt: 'NIP-07 extension required', vaultNoExtDesc: 'Install Alby or nos2x to decrypt the vault',
     vaultDecrypting: 'Decrypting...', vaultDecrypted: 'entries decrypted',
@@ -147,7 +175,14 @@ function applyLang() {
   document.getElementById('set-lbl-port').textContent = t('setPort');
   document.getElementById('set-lbl-lang').textContent = t('setLang');
   document.getElementById('set-lbl-unit').textContent = t('setUnit');
-  document.getElementById('btn-save-settings').textContent = t('save');
+  document.getElementById('manual-conn-summary').textContent = t('manualConn');
+  const saveNpubBtn = document.getElementById('btn-save-npub');
+  if (saveNpubBtn && saveNpubBtn.style.display !== 'none') saveNpubBtn.textContent = t('saveNpub');
+
+  // Connection section
+  document.getElementById('set-title-connect').textContent = t('setConnect');
+  document.getElementById('set-connect-desc').textContent = t('connectDesc');
+  document.getElementById('connect-lbl-lan').textContent = t('connectLan');
 
   // Vault tab
   document.getElementById('vault-no-npub-title').textContent = t('vaultNoNpub');
@@ -258,41 +293,7 @@ function updateStatus(s) {
   }
 }
 
-// --- Settings ---
-
-function showSettings() {
-  fetchJSON('/api/settings').then(s => {
-    document.getElementById('set-host').value = s.upstream_host;
-    document.getElementById('set-port').value = s.upstream_port;
-    document.getElementById('set-ssl').checked = s.upstream_ssl;
-    document.getElementById('settings-panel').style.display = 'block';
-    document.getElementById('settings-msg').textContent = '';
-  });
-}
-
-function hideSettings() {
-  document.getElementById('settings-panel').style.display = 'none';
-}
-
-async function saveSettings() {
-  const host = document.getElementById('set-host').value.trim();
-  const port = parseInt(document.getElementById('set-port').value);
-  const useSsl = document.getElementById('set-ssl').checked;
-  if (!host || !port) { alert('Host y puerto requeridos'); return; }
-
-  const result = await fetchJSON('/api/settings', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ upstream_host: host, upstream_port: port, upstream_ssl: useSsl }),
-  });
-
-  if (result.ok) {
-    document.getElementById('settings-msg').textContent = 'Reconectando...';
-    setTimeout(() => { hideSettings(); refresh(); }, 2000);
-  } else {
-    alert('Error: ' + (result.error || 'Unknown'));
-  }
-}
+// --- Settings (removed old inline panel functions) ---
 
 // --- Table ---
 
@@ -1134,29 +1135,64 @@ function updateVaultTabVisibility() {
 
 async function loadSettingsTab() {
   const s = await fetchJSON('/api/settings');
+
+  // Show current upstream connection
+  const curEl = document.getElementById('current-upstream');
+  if (s.upstream_host) {
+    curEl.textContent = `${t('currentUpstream')} ${s.upstream_host}:${s.upstream_port}${s.upstream_ssl ? ' (SSL)' : ''}`;
+  } else {
+    curEl.textContent = '';
+  }
+
+  // Pre-fill manual form
   document.getElementById('set-host').value = s.upstream_host || '';
   document.getElementById('set-port').value = s.upstream_port || '';
   document.getElementById('set-ssl').checked = s.upstream_ssl || false;
+
+  // npub
   document.getElementById('set-npub').value = s.npub || '';
+  applyNpubFieldState(s.npub);
+
+  // Preferences
   document.getElementById('set-lang').value = lang;
   document.getElementById('set-unit').value = unit;
 
-  // npub field lock
-  const npubInput = document.getElementById('set-npub');
-  const npubChangeBtn = document.getElementById('btn-npub-change');
-  if (s.npub) {
-    npubInput.readOnly = true;
-    npubInput.style.opacity = '0.6';
-    npubChangeBtn.style.display = 'inline-block';
-    npubChangeBtn.textContent = lang === 'es' ? 'Cambiar' : 'Change';
-  } else {
-    npubInput.readOnly = false;
-    npubInput.style.opacity = '1';
-    npubChangeBtn.style.display = 'none';
-  }
+  // Connection info (uses status endpoint for proxy_port + hidden_service)
+  loadConnectInfo(currentStatus);
 
   // Discover Umbrel servers
   discoverUpstreams();
+}
+
+function applyNpubFieldState(npub) {
+  const npubInput = document.getElementById('set-npub');
+  const saveBtn = document.getElementById('btn-save-npub');
+  const changeBtn = document.getElementById('btn-npub-change');
+  const statusEl = document.getElementById('npub-status');
+
+  if (npub) {
+    npubInput.readOnly = true;
+    npubInput.style.opacity = '0.6';
+    saveBtn.style.display = 'none';
+    changeBtn.style.display = 'inline-block';
+    changeBtn.textContent = lang === 'es' ? 'Cambiar' : 'Change';
+    statusEl.textContent = '';
+  } else {
+    npubInput.readOnly = false;
+    npubInput.style.opacity = '1';
+    saveBtn.style.display = 'inline-block';
+    saveBtn.textContent = t('saveNpub');
+    changeBtn.style.display = 'none';
+    statusEl.textContent = '';
+  }
+
+  // Show save btn only when there's text to save (and field is editable)
+  npubInput.oninput = () => {
+    if (!npubInput.readOnly) {
+      saveBtn.style.display = npubInput.value.trim() ? 'inline-block' : 'inline-block';
+      statusEl.textContent = '';
+    }
+  };
 }
 
 async function testUpstreamConnection() {
@@ -1164,14 +1200,17 @@ async function testUpstreamConnection() {
   const port = parseInt(document.getElementById('set-port').value);
   const useSsl = document.getElementById('set-ssl').checked;
   const el = document.getElementById('upstream-status');
+  const connectBtn = document.getElementById('btn-connect-manual');
+
+  connectBtn.style.display = 'none';
 
   if (!host || !port) {
-    el.textContent = lang === 'es' ? 'Introduce host y puerto' : 'Enter host and port';
+    el.textContent = t('hostPortRequired');
     el.style.color = 'var(--red)';
     return;
   }
 
-  el.textContent = lang === 'es' ? 'Verificando...' : 'Checking...';
+  el.textContent = t('checking');
   el.style.color = 'var(--text-muted)';
 
   try {
@@ -1184,44 +1223,48 @@ async function testUpstreamConnection() {
     if (result.ok) {
       const netName = result.network && result.network !== 'unknown'
         ? ' — ' + result.network.charAt(0).toUpperCase() + result.network.slice(1) : '';
-      el.textContent = (lang === 'es' ? 'Conectado' : 'Connected') + netName;
+      el.textContent = t('connected') + netName;
       el.style.color = 'var(--green)';
+      // Show connect button
+      connectBtn.style.display = 'inline-block';
+      connectBtn.textContent = t('connectBtn');
     } else {
-      el.textContent = (lang === 'es' ? 'Error: ' : 'Error: ') + result.error;
+      el.textContent = 'Error: ' + result.error;
       el.style.color = 'var(--red)';
     }
   } catch {
-    el.textContent = lang === 'es' ? 'Sin conexión' : 'Disconnected';
+    el.textContent = t('disconnected');
     el.style.color = 'var(--red)';
   }
 }
 
 async function discoverUpstreams() {
   const container = document.getElementById('discovered-servers');
-  container.innerHTML = `<span style="font-size:12px;color:var(--text-muted)">${lang==='es'?'Buscando servidores Electrum locales...':'Discovering local Electrum servers...'}</span>`;
+  container.innerHTML = `<span style="font-size:12px;color:var(--text-muted)">${t('searchingServers')}</span>`;
 
   try {
     const data = await fetchJSON('/api/discover-upstreams');
     const online = data.servers.filter(s => s.online);
 
     if (online.length === 0) {
-      container.innerHTML = `<span style="font-size:12px;color:var(--text-muted)">${lang==='es'?'No se detectaron servidores Electrum en la red local':'No Electrum servers detected on local network'}</span>`;
+      container.innerHTML = `<span style="font-size:12px;color:var(--text-muted)">${t('noServers')}</span>`;
       return;
     }
 
-    const label = lang === 'es' ? 'Servidores Electrum locales encontrados:' : 'Local Electrum servers found:';
-    const buttons = online.map(s => {
+    const cards = online.map(s => {
       const net = s.network && s.network !== 'unknown'
         ? s.network.charAt(0).toUpperCase() + s.network.slice(1) : '';
       const netColor = s.network === 'signet' ? 'var(--signet)' : s.network === 'testnet' ? 'var(--testnet)' : 'var(--text)';
-      return `<button class="small secondary" style="margin:2px 4px 2px 0;font-size:12px" onclick="selectUpstream('${s.host}',${s.port},${s.ssl})" title="${s.server_version}">
-        \u{1F7E2} ${s.name} <span style="color:${netColor}">${net}</span> (${s.host}:${s.port})
+      return `<button class="server-card" onclick="connectToUpstream('${s.host}',${s.port},${s.ssl})" title="${s.server_version || ''}">
+        <span class="server-dot">\u{1F7E2}</span>
+        <span class="server-name">${s.name}</span>
+        <span class="server-net" style="color:${netColor}">${net}</span>
+        <span class="server-addr">${s.host}:${s.port}</span>
       </button>`;
     }).join('');
 
-    container.innerHTML = `<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
-      <span style="font-size:12px;color:var(--text-muted)">${label}</span>${buttons}
-    </div>`;
+    container.innerHTML = `<div style="font-size:12px;color:var(--text-muted);margin-bottom:6px">${t('localServers')}</div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">${cards}</div>`;
   } catch {
     container.innerHTML = '';
   }
@@ -1235,13 +1278,15 @@ function unlockNpubField() {
   if (!confirm(msg)) return;
 
   const npubInput = document.getElementById('set-npub');
-  const npubChangeBtn = document.getElementById('btn-npub-change');
   npubInput.readOnly = false;
   npubInput.style.opacity = '1';
   npubInput.value = '';
   npubInput.focus();
-  npubChangeBtn.style.display = 'none';
-  npubInput._vaultCleared = true; // flag to clear vault on save
+  npubInput._vaultCleared = true;
+  document.getElementById('btn-npub-change').style.display = 'none';
+  document.getElementById('btn-save-npub').style.display = 'inline-block';
+  document.getElementById('btn-save-npub').textContent = t('saveNpub');
+  document.getElementById('npub-status').textContent = '';
 }
 
 function updateAaSuffix() {
@@ -1249,78 +1294,151 @@ function updateAaSuffix() {
   document.getElementById('lbl-aa-suffix').textContent = val === 1 ? t('aaSuffix1') : t('aaSuffixN');
 }
 
-function selectUpstream(host, port, ssl) {
-  document.getElementById('set-host').value = host;
-  document.getElementById('set-port').value = port;
-  document.getElementById('set-ssl').checked = ssl;
+// --- Wallet connection info ---
+
+function loadConnectInfo(status) {
+  const proxyPort = status.proxy_port || 50005;
+  const hostname = location.hostname || 'tu-nodo.local';
+  const lanAddr = hostname + ':' + proxyPort;
+
+  document.getElementById('connect-lan').textContent = lanAddr;
 }
 
-async function saveAllSettings() {
-  const host = document.getElementById('set-host').value.trim();
-  const port = parseInt(document.getElementById('set-port').value);
-  const useSsl = document.getElementById('set-ssl').checked;
-  const npub = document.getElementById('set-npub').value.trim();
-  const newLang = document.getElementById('set-lang').value;
-  const newUnit = document.getElementById('set-unit').value;
+function copyConnectValue(elementId) {
+  const el = document.getElementById(elementId);
+  if (!el) return;
+  const text = el.textContent;
 
-  if (!host || !port || isNaN(port)) {
-    document.getElementById('settings-msg').textContent = lang === 'es' ? 'Host y puerto requeridos' : 'Host and port required';
-    document.getElementById('settings-msg').style.color = 'var(--red)';
-    return;
+  try {
+    if (navigator.clipboard && window.isSecureContext) {
+      navigator.clipboard.writeText(text);
+    } else {
+      const ta = document.createElement('textarea');
+      ta.value = text;
+      ta.style.position = 'fixed';
+      ta.style.opacity = '0';
+      document.body.appendChild(ta);
+      ta.select();
+      document.execCommand('copy');
+      document.body.removeChild(ta);
+    }
+    const orig = el.textContent;
+    el.textContent = t('copied');
+    setTimeout(() => { el.textContent = orig; }, 800);
+  } catch (e) {
+    console.warn('Copy failed:', e);
   }
+}
 
-  // Save upstream + npub to server
+// Connect to a discovered upstream server (click on card)
+async function connectToUpstream(host, port, ssl) {
+  const curEl = document.getElementById('current-upstream');
+  curEl.textContent = t('connecting');
+  curEl.style.color = 'var(--text-muted)';
+
   const result = await fetchJSON('/api/settings', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ upstream_host: host, upstream_port: port, upstream_ssl: useSsl, npub }),
+    body: JSON.stringify({ upstream_host: host, upstream_port: port, upstream_ssl: ssl }),
   });
 
   if (result.error) {
-    document.getElementById('settings-msg').textContent = 'Error: ' + result.error;
-    document.getElementById('settings-msg').style.color = 'var(--red)';
+    curEl.textContent = 'Error: ' + result.error;
+    curEl.style.color = 'var(--red)';
     return;
   }
 
-  // Show what was saved
-  console.log('Settings saved:', result);
+  curEl.textContent = `${t('currentUpstream')} ${host}:${port}${ssl ? ' (SSL)' : ''}`;
+  curEl.style.color = 'var(--green)';
+  setTimeout(() => { curEl.style.color = 'var(--text-muted)'; }, 2000);
 
-  // Save preferences locally
-  if (newLang !== lang) {
-    lang = newLang;
-    localStorage.setItem('bp-lang', lang);
-    applyLang();
-  }
-  if (newUnit !== unit) {
-    unit = newUnit;
-    localStorage.setItem('bp-unit', unit);
+  // Update manual form to match
+  document.getElementById('set-host').value = host;
+  document.getElementById('set-port').value = port;
+  document.getElementById('set-ssl').checked = ssl;
+  document.getElementById('upstream-status').textContent = '';
+  document.getElementById('btn-connect-manual').style.display = 'none';
+}
+
+// Connect from the manual connection form
+async function connectManual() {
+  const host = document.getElementById('set-host').value.trim();
+  const port = parseInt(document.getElementById('set-port').value);
+  const ssl = document.getElementById('set-ssl').checked;
+  const el = document.getElementById('upstream-status');
+
+  el.textContent = t('connecting');
+  el.style.color = 'var(--text-muted)';
+
+  const result = await fetchJSON('/api/settings', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ upstream_host: host, upstream_port: port, upstream_ssl: ssl }),
+  });
+
+  if (result.error) {
+    el.textContent = 'Error: ' + result.error;
+    el.style.color = 'var(--red)';
+    return;
   }
 
+  el.textContent = t('connected') + ' — ' + host + ':' + port;
+  el.style.color = 'var(--green)';
+  document.getElementById('btn-connect-manual').style.display = 'none';
+
+  // Update current upstream display
+  const curEl = document.getElementById('current-upstream');
+  curEl.textContent = `${t('currentUpstream')} ${host}:${port}${ssl ? ' (SSL)' : ''}`;
+
+  // Keep details open so the user sees the success
+}
+
+// Save npub independently
+async function saveNpub() {
+  const npubInput = document.getElementById('set-npub');
+  const statusEl = document.getElementById('npub-status');
+  const npub = npubInput.value.trim();
+  const clearVault = npubInput._vaultCleared || false;
+
+  const result = await fetchJSON('/api/npub', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ npub, clear_vault: clearVault }),
+  });
+
+  if (result.error) {
+    statusEl.textContent = 'Error: ' + result.error;
+    statusEl.style.color = 'var(--red)';
+    return;
+  }
+
+  npubInput._vaultCleared = false;
   currentNpub = npub;
   updateVaultTabVisibility();
+  applyNpubFieldState(npub);
 
-  // If npub was changed via unlock, clear the vault
-  const npubInput = document.getElementById('set-npub');
-  if (npubInput._vaultCleared) {
-    await fetchJSON('/api/vault/clear', { method: 'POST' });
-    npubInput._vaultCleared = false;
+  statusEl.textContent = npub ? t('npubSaved') : t('npubCleared');
+  statusEl.style.color = 'var(--green)';
+  setTimeout(() => { statusEl.textContent = ''; }, 3000);
+}
+
+// Inline preference saves (no global Save button)
+function savePrefLang(val) {
+  if (val !== lang) {
+    lang = val;
+    localStorage.setItem('bp-lang', lang);
+    applyLang();
+    renderTable(currentData.txs, currentData.current_height);
   }
+}
 
-  // Lock npub field if set
-  if (npub) {
-    npubInput.readOnly = true;
-    npubInput.style.opacity = '0.6';
-    document.getElementById('btn-npub-change').style.display = 'inline-block';
-    document.getElementById('btn-npub-change').textContent = lang === 'es' ? 'Cambiar' : 'Change';
-  } else {
-    npubInput.readOnly = false;
-    npubInput.style.opacity = '1';
-    document.getElementById('btn-npub-change').style.display = 'none';
+function savePrefUnit(val) {
+  if (val !== unit) {
+    unit = val;
+    localStorage.setItem('bp-unit', unit);
+    const ub = document.getElementById('unit-btn'); if (ub) ub.textContent = unit === 'btc' ? 'BTC' : 'sats';
+    renderTable(currentData.txs, currentData.current_height);
   }
-
-  document.getElementById('settings-msg').textContent = t('saved') + ' — ' + host + ':' + port + (useSsl ? ' (SSL)' : '');
-  document.getElementById('settings-msg').style.color = 'var(--green)';
-  setTimeout(() => { document.getElementById('settings-msg').textContent = ''; }, 4000);
 }
 
 // --- Vault tab ---

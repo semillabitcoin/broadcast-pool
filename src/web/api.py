@@ -7,6 +7,7 @@ import os
 
 from aiohttp import web
 
+from src import config
 from src.pool.store import TxStore
 
 log = logging.getLogger(__name__)
@@ -81,6 +82,7 @@ def create_app(store: TxStore, proxy_server=None, scheduler=None) -> web.Applica
     app.router.add_post("/api/txs/resolve-inputs", handle_resolve_inputs)
     app.router.add_post("/api/test-connection", handle_test_connection)
     app.router.add_get("/api/discover-upstreams", handle_discover_upstreams)
+    app.router.add_post("/api/npub", handle_set_npub)
     app.router.add_get("/api/vault", handle_vault)
     app.router.add_post("/api/vault/clear", handle_vault_clear)
     app.router.add_get("/api/conflicts", handle_conflicts)
@@ -590,6 +592,7 @@ async def handle_status(request: web.Request) -> web.Response:
         "broadcasting": len(store.get_all_txs(status="broadcasting")),
         "confirmed": len(store.get_all_txs(status="confirmed")),
         "failed": len(store.get_all_txs(status="failed")),
+        "proxy_port": config.PROXY_PORT,
     }
     return web.json_response(data)
 
@@ -629,21 +632,7 @@ async def handle_set_settings(request: web.Request) -> web.Response:
         return web.json_response({"error": err}, status=400)
 
     store.set_upstream(host, port, use_ssl=bool(use_ssl))
-    log.info("Settings saved: upstream=%s:%d ssl=%s", host, port, use_ssl)
-
-    # Verify it was saved
-    saved_host, saved_port, saved_ssl = store.get_upstream()
-    log.info("Settings verified: upstream=%s:%d ssl=%s", saved_host, saved_port, saved_ssl)
-
-    # Handle npub
-    if "npub" in body:
-        npub = body.get("npub", "").strip()
-        if npub:
-            if not npub.startswith("npub1") or len(npub) < 58:
-                return web.json_response({"error": "Invalid npub format"}, status=400)
-            store.set_state("npub", npub)
-        else:
-            store.set_state("npub", "")
+    log.info("Upstream saved: %s:%d ssl=%s", host, port, use_ssl)
 
     # Reconnect scheduler to new upstream (detects network automatically)
     if scheduler:
@@ -827,6 +816,27 @@ async def handle_discover_upstreams(request: web.Request) -> web.Response:
     results = await aio.gather(*[probe(s) for s in KNOWN_SERVERS])
     online = [r for r in results if r["online"]]
     return web.json_response({"servers": results, "online": len(online)})
+
+
+async def handle_set_npub(request: web.Request) -> web.Response:
+    """Save npub independently from upstream settings."""
+    store: TxStore = request.app["store"]
+    body = await request.json()
+    npub = body.get("npub", "").strip()
+    clear_vault = body.get("clear_vault", False)
+
+    if npub and (not npub.startswith("npub1") or len(npub) < 58):
+        return web.json_response({"error": "Invalid npub format"}, status=400)
+
+    store.set_state("npub", npub)
+
+    if clear_vault:
+        with store._lock:
+            store._conn.execute("DELETE FROM vault_entries")
+            store._conn.commit()
+        log.info("Vault cleared (npub changed)")
+
+    return web.json_response({"ok": True, "npub": npub})
 
 
 async def handle_vault(request: web.Request) -> web.Response:
