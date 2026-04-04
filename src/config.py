@@ -23,7 +23,7 @@ PROTOCOL_VERSION = "1.4"
 APP_SEED = os.environ.get("APP_SEED", "")
 
 # Purge confirmed txs after this many blocks (0 = never purge)
-PURGE_AFTER_BLOCKS = int(os.environ.get("PURGE_AFTER_BLOCKS", "3"))
+PURGE_AFTER_BLOCKS = int(os.environ.get("PURGE_AFTER_BLOCKS", "1"))
 
 # Genesis hashes for network detection (from server.features)
 GENESIS_HASHES = {
