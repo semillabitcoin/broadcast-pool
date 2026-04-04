@@ -13,7 +13,7 @@ let vaultSort = { field: null, asc: true };
 const i18n = {
   es: {
     title: 'Broadcast Pool',
-    subtitle: 'Proxy Electrum con broadcast programado de transacciones - umbrel.local:50005',
+    subtitle: 'Proxy Electrum con broadcast programado de transacciones',
     net: 'Red', height: 'Altura', mtp: 'MTP', retained: 'Retenidas',
     scheduled: 'Programadas', connections: 'Conexiones', upstream: 'Upstream',
     change: 'Cambiar', host: 'Host', port: 'Puerto', connect: 'Conectar',
@@ -60,7 +60,7 @@ const i18n = {
   },
   en: {
     title: 'Broadcast Pool',
-    subtitle: 'Electrum proxy with scheduled transaction broadcast - umbrel.local:50005',
+    subtitle: 'Electrum proxy with scheduled transaction broadcast',
     net: 'Network', height: 'Height', mtp: 'MTP', retained: 'Retained',
     scheduled: 'Scheduled', connections: 'Connections', upstream: 'Upstream',
     change: 'Change', host: 'Host', port: 'Port', connect: 'Connect',
