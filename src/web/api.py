@@ -760,8 +760,6 @@ async def handle_test_connection(request: web.Request) -> web.Response:
             pass
 
         return web.json_response({"ok": True, "server": server_name, "network": network})
-        else:
-            return web.json_response({"ok": False, "error": "Unexpected response"})
 
     except aio.TimeoutError:
         return web.json_response({"ok": False, "error": "Timeout (5s)"})
