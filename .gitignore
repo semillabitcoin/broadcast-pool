@@ -4,3 +4,14 @@ __pycache__/
 *.db
 data/pool.db
 .DS_Store
+*.mov
+*.mp4
+*.avi
+*.pem
+*.key
+*.env
+*.env.*
+debug-*
+FALLO*
+CLAUDE.md
+.claude/
