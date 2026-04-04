@@ -788,22 +788,41 @@ async def handle_discover_upstreams(request: web.Request) -> web.Response:
 
     async def probe(server):
         try:
+            import json as jsonlib
+            import hashlib
             reader, writer = await aio.wait_for(
                 aio.open_connection(server["host"], server["port"]),
                 timeout=2.0,
             )
-            # Send server.version to confirm it's Electrum
-            import json
-            req = json.dumps({"jsonrpc": "2.0", "method": "server.version", "params": ["bp-probe", "1.4"], "id": 1}) + "\n"
+            # Handshake
+            req = jsonlib.dumps({"jsonrpc": "2.0", "method": "server.version", "params": ["bp-probe", "1.4"], "id": 1}) + "\n"
             writer.write(req.encode())
             await writer.drain()
             line = await aio.wait_for(reader.readline(), timeout=2.0)
-            writer.close()
-            resp = json.loads(line)
+            resp = jsonlib.loads(line)
             server_name = resp.get("result", [server["name"]])[0] if "result" in resp else server["name"]
-            return {**server, "online": True, "server_version": server_name}
+
+            # Detect network via genesis block
+            network = "unknown"
+            req2 = jsonlib.dumps({"jsonrpc": "2.0", "method": "blockchain.block.header", "params": [0], "id": 2}) + "\n"
+            writer.write(req2.encode())
+            await writer.drain()
+            line2 = await aio.wait_for(reader.readline(), timeout=2.0)
+            try:
+                resp2 = jsonlib.loads(line2)
+                header_hex = resp2.get("result", "")
+                if header_hex:
+                    header_bytes = bytes.fromhex(header_hex)
+                    block_hash = hashlib.sha256(hashlib.sha256(header_bytes).digest()).digest()[::-1].hex()
+                    from src import config
+                    network = config.GENESIS_HASHES.get(block_hash, "unknown")
+            except Exception:
+                pass
+
+            writer.close()
+            return {**server, "online": True, "server_version": server_name, "network": network}
         except Exception:
-            return {**server, "online": False, "server_version": None}
+            return {**server, "online": False, "server_version": None, "network": None}
 
     results = await aio.gather(*[probe(s) for s in KNOWN_SERVERS])
     online = [r for r in results if r["online"]]

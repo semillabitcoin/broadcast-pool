@@ -43,8 +43,8 @@ const i18n = {
     tabPool: 'Pool', tabSettings: 'Ajustes', tabVault: 'B\u00f3veda',
     setUpstream: 'Conexi\u00f3n a servidor Electrum', setVault: 'B\u00f3veda cifrada (Nostr)',
     setPrefs: 'Preferencias', setLang: 'Idioma', setUnit: 'Unidad', setPort: 'Puerto',
-    setNpubHelp: 'Si configuras una npub, las transacciones confirmadas se almacenar\u00e1n cifradas en una b\u00f3veda privada antes de purgarlas.',
-    setNpubHelp2: 'Solo t\u00fa puedes descifrarlas con Alby, Nos2x u otra extensi\u00f3n de navegador NIP-07.',
+    setNpubHelp: 'Las transacciones confirmadas se purgan despu\u00e9s de 1 bloque. Puedes almacenarlas cifradas para su posterior an\u00e1lisis dejando un npub.',
+    setNpubHelp2: 'Solo t\u00fa podr\u00e1s descifrarlas localmente con Alby, Nos2x u otra extensi\u00f3n de navegador NIP-07.',
     setNpubWarn: 'Nota: valora no usar tu npub principal. Usa un npub burner que no asocie tu nym a la actividad de tx bitcoin.',
     testConn: 'Verificar conexi\u00f3n',
     save: 'Guardar', saved: 'Guardado',
@@ -65,7 +65,7 @@ const i18n = {
     scheduled: 'Scheduled', connections: 'Connections', upstream: 'Upstream',
     change: 'Change', host: 'Host', port: 'Port', connect: 'Connect',
     cancel: 'Cancel', reconnecting: 'Reconnecting...',
-    aaPrefix: 'Broadcast pending from block', aaGap: 'with', aaSuffix: 'blocks between each tx',
+    aaPrefix: 'Schedule pending transactions at blockheight', aaGap: 'with', aaSuffix: 'blocks between each tx',
     assign: 'Assign', importTx: 'Import TX',
     pasteHex: 'Paste the hex of a signed transaction',
     wallet: 'Wallet', import_btn: 'Import', importing: 'Importing...',
@@ -90,8 +90,8 @@ const i18n = {
     tabPool: 'Pool', tabSettings: 'Settings', tabVault: 'Vault',
     setUpstream: 'Electrum server connection', setVault: 'Encrypted vault (Nostr)',
     setPrefs: 'Preferences', setLang: 'Language', setUnit: 'Unit', setPort: 'Port',
-    setNpubHelp: 'If you set an npub, confirmed transactions will be stored encrypted in a private vault before purging.',
-    setNpubHelp2: 'Only you can decrypt them with Alby, Nos2x or another NIP-07 browser extension.',
+    setNpubHelp: 'Confirmed transactions are purged after 1 block. You can store them encrypted for later analysis by setting an npub.',
+    setNpubHelp2: 'Only you will be able to decrypt them locally with Alby, Nos2x or another NIP-07 browser extension.',
     setNpubWarn: 'Note: consider not using your main npub. Use a burner npub that doesn\'t link your nym to Bitcoin tx activity.',
     testConn: 'Test connection',
     save: 'Save', saved: 'Saved',
@@ -1198,7 +1198,7 @@ async function testUpstreamConnection() {
 
 async function discoverUpstreams() {
   const container = document.getElementById('discovered-servers');
-  container.innerHTML = `<span style="font-size:12px;color:var(--text-muted)">${lang==='es'?'Buscando servidores Electrum...':'Discovering Electrum servers...'}</span>`;
+  container.innerHTML = `<span style="font-size:12px;color:var(--text-muted)">${lang==='es'?'Buscando servidores Electrum locales...':'Discovering local Electrum servers...'}</span>`;
 
   try {
     const data = await fetchJSON('/api/discover-upstreams');
@@ -1209,11 +1209,19 @@ async function discoverUpstreams() {
       return;
     }
 
-    container.innerHTML = online.map(s =>
-      `<button class="small secondary" style="margin:2px 4px 2px 0;font-size:12px" onclick="selectUpstream('${s.host}',${s.port},${s.ssl})" title="${s.server_version}">
-        \u{1F7E2} ${s.name} (${s.host}:${s.port})
-      </button>`
-    ).join('');
+    const label = lang === 'es' ? 'Servidores Electrum locales encontrados:' : 'Local Electrum servers found:';
+    const buttons = online.map(s => {
+      const net = s.network && s.network !== 'unknown'
+        ? s.network.charAt(0).toUpperCase() + s.network.slice(1) : '';
+      const netColor = s.network === 'signet' ? 'var(--signet)' : s.network === 'testnet' ? 'var(--testnet)' : 'var(--text)';
+      return `<button class="small secondary" style="margin:2px 4px 2px 0;font-size:12px" onclick="selectUpstream('${s.host}',${s.port},${s.ssl})" title="${s.server_version}">
+        \u{1F7E2} ${s.name} <span style="color:${netColor}">${net}</span> (${s.host}:${s.port})
+      </button>`;
+    }).join('');
+
+    container.innerHTML = `<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+      <span style="font-size:12px;color:var(--text-muted)">${label}</span>${buttons}
+    </div>`;
   } catch {
     container.innerHTML = '';
   }
