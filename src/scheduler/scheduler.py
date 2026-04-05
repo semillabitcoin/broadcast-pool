@@ -201,10 +201,14 @@ class Scheduler:
                     else:
                         self._current_price = price
                         self.store.set_state("current_price", str(price))
+                # Check expiry on every poll cycle (independent of blocks)
+                self._purge_expired_txs()
             except asyncio.CancelledError:
                 break
             except Exception as e:
                 log.debug("Price poll error: %s", e)
+            # Also check expiry even without price source
+            self._purge_expired_txs()
             await asyncio.sleep(30)
 
     async def _fetch_price(self, source: str) -> float | None:
