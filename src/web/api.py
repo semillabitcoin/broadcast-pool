@@ -83,6 +83,7 @@ def create_app(store: TxStore, proxy_server=None, scheduler=None) -> web.Applica
     app.router.add_post("/api/test-connection", handle_test_connection)
     app.router.add_get("/api/discover-upstreams", handle_discover_upstreams)
     app.router.add_post("/api/npub", handle_set_npub)
+    app.router.add_post("/api/preferences", handle_set_preferences)
     app.router.add_get("/api/vault", handle_vault)
     app.router.add_post("/api/vault/clear", handle_vault_clear)
     app.router.add_get("/api/conflicts", handle_conflicts)
@@ -606,6 +607,7 @@ async def handle_get_settings(request: web.Request) -> web.Response:
         "upstream_ssl": use_ssl,
         "network": store.get_detected_network(),
         "npub": store.get_state("npub") or "",
+        "auto_schedule_locktime": store.get_state("auto_schedule_locktime") != "false",
     })
 
 
@@ -837,6 +839,18 @@ async def handle_set_npub(request: web.Request) -> web.Response:
         log.info("Vault cleared (npub changed)")
 
     return web.json_response({"ok": True, "npub": npub})
+
+
+async def handle_set_preferences(request: web.Request) -> web.Response:
+    """Save UI preferences (auto_schedule_locktime, etc.)."""
+    store: TxStore = request.app["store"]
+    body = await request.json()
+
+    if "auto_schedule_locktime" in body:
+        val = "true" if body["auto_schedule_locktime"] else "false"
+        store.set_state("auto_schedule_locktime", val)
+
+    return web.json_response({"ok": True})
 
 
 async def handle_vault(request: web.Request) -> web.Response:

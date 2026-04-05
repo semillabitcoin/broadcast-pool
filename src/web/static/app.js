@@ -63,6 +63,7 @@ const i18n = {
     connectDesc: 'Configura tu wallet para usar Broadcast Pool como servidor Electrum. Las transacciones se retendr\u00e1n hasta que las programes.',
     connectLan: 'Red local',
     copied: 'copiado',
+    autoLocktime: 'Auto agendar transacciones con locktime futuro',
     vaultNoNpub: 'Configura tu npub', vaultNoNpubDesc: 'Ve a Ajustes y pega tu npub para activar la b\u00f3veda cifrada',
     vaultNoExt: 'Extensi\u00f3n NIP-07 requerida', vaultNoExtDesc: 'Instala Alby o nos2x para descifrar la b\u00f3veda',
     vaultDecrypting: 'Descifrando...', vaultDecrypted: 'entradas descifradas',
@@ -124,6 +125,7 @@ const i18n = {
     connectDesc: 'Set up your wallet to use Broadcast Pool as its Electrum server. Transactions will be retained until you schedule them.',
     connectLan: 'Local network',
     copied: 'copied',
+    autoLocktime: 'Auto-schedule transactions with future locktime',
     vaultNoNpub: 'Set up your npub', vaultNoNpubDesc: 'Go to Settings and paste your npub to enable the encrypted vault',
     vaultNoExt: 'NIP-07 extension required', vaultNoExtDesc: 'Install Alby or nos2x to decrypt the vault',
     vaultDecrypting: 'Decrypting...', vaultDecrypted: 'entries decrypted',
@@ -176,6 +178,7 @@ function applyLang() {
   document.getElementById('set-lbl-port').textContent = t('setPort');
   document.getElementById('set-lbl-lang').textContent = t('setLang');
   document.getElementById('set-lbl-unit').textContent = t('setUnit');
+  document.getElementById('set-lbl-auto-locktime').textContent = t('autoLocktime');
   document.getElementById('manual-conn-summary').textContent = t('manualConn');
   const saveNpubBtn = document.getElementById('btn-save-npub');
   if (saveNpubBtn && saveNpubBtn.style.display !== 'none') saveNpubBtn.textContent = t('saveNpub');
@@ -1157,6 +1160,7 @@ async function loadSettingsTab() {
   // Preferences
   document.getElementById('set-lang').value = lang;
   document.getElementById('set-unit').value = unit;
+  document.getElementById('set-auto-locktime').checked = s.auto_schedule_locktime !== false;
 
   // Connection info (uses status endpoint for proxy_port + hidden_service)
   loadConnectInfo(currentStatus);
@@ -1468,6 +1472,14 @@ function savePrefUnit(val) {
     const ub = document.getElementById('unit-btn'); if (ub) ub.textContent = unit === 'btc' ? 'BTC' : 'sats';
     renderTable(currentData.txs, currentData.current_height);
   }
+}
+
+function savePrefAutoLocktime(checked) {
+  fetchJSON('/api/preferences', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ auto_schedule_locktime: checked }),
+  });
 }
 
 // --- Vault tab ---

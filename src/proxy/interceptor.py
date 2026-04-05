@@ -81,7 +81,9 @@ class Interceptor:
         # - Sparrow sets locktime ≈ current_height as anti-fee-sniping (ignore)
         current_height = self.store.get_current_height()
 
-        if parsed.locktime >= 500_000_000:
+        auto_lock = self.store.get_state("auto_schedule_locktime") != "false"
+
+        if parsed.locktime >= 500_000_000 and auto_lock:
             # Unix timestamp locktime — scheduler will broadcast when MTP passes it
             from datetime import datetime
             dt = datetime.utcfromtimestamp(parsed.locktime).strftime("%Y-%m-%d %H:%M UTC")
@@ -91,7 +93,8 @@ class Interceptor:
             )
         elif (0 < parsed.locktime < 500_000_000
                 and current_height > 0
-                and parsed.locktime > current_height + 1):
+                and parsed.locktime > current_height + 1
+                and auto_lock):
             # Real future block height locktime — auto-schedule
             self.store.update_target_block(parsed.txid, parsed.locktime)
             log.info(

@@ -240,6 +240,12 @@
           <option value="sats">sats</option>
         </select>
       </div>
+      <div class="settings-row" style="margin-top:8px">
+        <label style="display:flex;align-items:center;gap:8px;font-size:13px;color:var(--text-muted);cursor:pointer">
+          <input type="checkbox" id="set-auto-locktime" checked onchange="savePrefAutoLocktime(this.checked)">
+          <span id="set-lbl-auto-locktime">Auto agendar transacciones con locktime futuro</span>
+        </label>
+      </div>
     </div>
   </div>
 
