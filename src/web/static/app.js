@@ -14,12 +14,13 @@ let discoveredServers = [];
 const i18n = {
   es: {
     title: 'Broadcast Pool',
-    subtitle: 'Proxy Electrum con broadcast programado de transacciones',
+    subtitle: 'Proxy Electrum con retransmisi\u00f3n programada de transacciones Bitcoin',
     net: 'Red', height: 'Altura', mtp: 'MTP', retained: 'Retenidas',
-    scheduled: 'Programadas', connections: 'Wallets', upstream: 'Upstream',
+    scheduled: 'Programadas', connections: 'Conexiones', upstream: 'Upstream',
+    connectionsTip: 'Wallets conectadas a Broadcast Pool en este momento',
     change: 'Cambiar', host: 'Host', port: 'Puerto', connect: 'Conectar',
     cancel: 'Cancelar', reconnecting: 'Reconectando...',
-    aaPrefix: 'Auto agenda transacciones pendientes a la altura de bloque', aaGap: 'y con', aaSuffix1: 'bloque entre cada transacci\u00f3n', aaSuffixN: 'bloques entre cada transacci\u00f3n',
+    aaPrefix: 'Retransmitir pendientes a partir del bloque', aaGap: 'cada', aaSuffix1: 'bloque', aaSuffixN: 'bloques',
     assign: 'Agendar', importTx: 'Importar TX',
     pasteHex: 'Pega el hex de una transaccion firmada',
     wallet: 'Wallet', import_btn: 'Importar', importing: 'Importando...',
@@ -42,9 +43,12 @@ const i18n = {
     dateFuture: 'La fecha debe ser futura',
     blocks: 'bloques', bl: 'bl',
     tabPool: 'Pool', tabSettings: 'Ajustes', tabVault: 'B\u00f3veda',
-    setUpstream: 'Conexi\u00f3n a servidor Electrum', setVault: 'B\u00f3veda cifrada (Nostr)',
-    setPrefs: 'Preferencias', setLang: 'Idioma', setUnit: 'Unidad', setPort: 'Puerto',
-    setNpubHelp: 'Las transacciones confirmadas se purgan despu\u00e9s de 1 bloque. Puedes almacenarlas cifradas para su posterior an\u00e1lisis dejando un npub.',
+    setUpstream: '1. Conecta Broadcast Pool a un servidor Electrum',
+    setUpstreamDesc: 'Broadcast Pool necesita un servidor Electrum para conocer el estado de la red y retransmitir tus transacciones:',
+    setVault: '4. B\u00f3veda cifrada (Nostr)',
+    setPrefs: '5. Otras preferencias', setBehavior: '3. Comportamiento',
+    setBehaviorDesc: 'Cuando BP recibe una transacci\u00f3n con nLockTime en el futuro, puede agendarla autom\u00e1ticamente para retransmitirla en el bloque o fecha indicados:', setLang: 'Idioma', setUnit: 'Unidad', setPort: 'Puerto',
+    setNpubHelp: 'Las transacciones confirmadas se purgan de BP despu\u00e9s de 1 bloque. Puedes almacenarlas cifradas para su posterior an\u00e1lisis dejando un npub.',
     setNpubHelp2: 'Solo t\u00fa podr\u00e1s descifrarlas localmente con Alby, Nos2x u otra extensi\u00f3n de navegador NIP-07.',
     setNpubWarn: 'Nota: valora no usar tu npub principal. Usa un npub burner que no asocie tu nym a la actividad de tx bitcoin.',
     testConn: 'Verificar conexi\u00f3n',
@@ -59,8 +63,8 @@ const i18n = {
     checking: 'Verificando...', disconnected: 'Sin conexi\u00f3n',
     npubSaved: 'npub guardada', npubCleared: 'npub eliminada',
     saveNpub: 'Guardar',
-    setConnect: 'C\u00f3mo conectar tu wallet',
-    connectDesc: 'Configura tu wallet para usar Broadcast Pool como servidor Electrum. Las transacciones se retendr\u00e1n hasta que las programes.',
+    setConnect: '2. C\u00f3mo acumular transacciones',
+    connectDesc: 'Puedes pegar manualmente el hex de una transacci\u00f3n desde el tab Pool, o conectar tu wallet a Broadcast Pool como servidor Electrum para que las retenga autom\u00e1ticamente:',
     connectLan: 'Red local',
     copied: 'copiado',
     autoLocktime: 'Auto agendar transacciones con locktime futuro',
@@ -72,16 +76,21 @@ const i18n = {
     hexCopied: 'hex copiado', txidCopied: 'txid copiado',
     copyHex: 'Copiar tx hex', copyTxid: 'Copiar txid',
     mtpLag: 'MTP lag', mtpPassed: 'MTP ya paso esta fecha',
+    mtpTip: 'Median Time Past: la mediana de los timestamps de los \u00faltimos 11 bloques. Es el reloj que usa Bitcoin para evaluar nLocktimes en base a tiempo.',
     mtpWill: 'MTP la alcanzara en',
   },
   en: {
     title: 'Broadcast Pool',
-    subtitle: 'Electrum proxy with scheduled transaction broadcast',
+    subtitle: 'Electrum proxy with scheduled Bitcoin transaction broadcast',
     net: 'Network', height: 'Height', mtp: 'MTP', retained: 'Retained',
-    scheduled: 'Scheduled', connections: 'Wallets', upstream: 'Upstream',
+    scheduled: 'Scheduled', connections: 'Connections', upstream: 'Upstream',
+    connectionsTip: 'Wallets currently connected to Broadcast Pool',
     change: 'Change', host: 'Host', port: 'Port', connect: 'Connect',
     cancel: 'Cancel', reconnecting: 'Reconnecting...',
-    aaPrefix: 'Schedule pending transactions at blockheight', aaGap: 'with', aaSuffix1: 'block between each tx', aaSuffixN: 'blocks between each tx',
+    aaPrefix: 'Broadcast pending from block', aaGap: 'every',
+    setBehavior: '3. Behavior',
+    setBehaviorDesc: 'When BP receives a transaction with a future nLockTime, it can automatically schedule it for broadcast at the specified block or date:',
+    aaSuffix1: 'block', aaSuffixN: 'blocks',
     assign: 'Assign', importTx: 'Import TX',
     pasteHex: 'Paste the hex of a signed transaction',
     wallet: 'Wallet', import_btn: 'Import', importing: 'Importing...',
@@ -104,9 +113,11 @@ const i18n = {
     dateFuture: 'Date must be in the future',
     blocks: 'blocks', bl: 'bl',
     tabPool: 'Pool', tabSettings: 'Settings', tabVault: 'Vault',
-    setUpstream: 'Electrum server connection', setVault: 'Encrypted vault (Nostr)',
-    setPrefs: 'Preferences', setLang: 'Language', setUnit: 'Unit', setPort: 'Port',
-    setNpubHelp: 'Confirmed transactions are purged after 1 block. You can store them encrypted for later analysis by setting an npub.',
+    setUpstream: '1. Connect Broadcast Pool to an Electrum server',
+    setUpstreamDesc: 'Broadcast Pool needs an Electrum server to track the network state and broadcast your transactions:',
+    setVault: '4. Encrypted vault (Nostr)',
+    setPrefs: '5. Other preferences', setLang: 'Language', setUnit: 'Unit', setPort: 'Port',
+    setNpubHelp: 'Confirmed transactions are purged from BP after 1 block. You can store them encrypted for later analysis by setting an npub.',
     setNpubHelp2: 'Only you will be able to decrypt them locally with Alby, Nos2x or another NIP-07 browser extension.',
     setNpubWarn: 'Note: consider not using your main npub. Use a burner npub that doesn\'t link your nym to Bitcoin tx activity.',
     testConn: 'Test connection',
@@ -121,8 +132,8 @@ const i18n = {
     checking: 'Checking...', disconnected: 'Disconnected',
     npubSaved: 'npub saved', npubCleared: 'npub cleared',
     saveNpub: 'Save',
-    setConnect: 'How to connect your wallet',
-    connectDesc: 'Set up your wallet to use Broadcast Pool as its Electrum server. Transactions will be retained until you schedule them.',
+    setConnect: '2. How to accumulate transactions',
+    connectDesc: 'You can manually paste a transaction hex from the Pool tab, or connect your wallet to Broadcast Pool as an Electrum server so it retains them automatically:',
     connectLan: 'Local network',
     copied: 'copied',
     autoLocktime: 'Auto-schedule transactions with future locktime',
@@ -134,6 +145,7 @@ const i18n = {
     hexCopied: 'hex copied', txidCopied: 'txid copied',
     copyHex: 'Copy tx hex', copyTxid: 'Copy txid',
     mtpLag: 'MTP lag', mtpPassed: 'MTP already passed this date',
+    mtpTip: 'Median Time Past: the median of the last 11 block timestamps. The clock Bitcoin uses to evaluate time-based nLocktimes.',
     mtpWill: 'MTP will reach it in',
   },
 };
@@ -160,14 +172,16 @@ function applyLang() {
 
   document.getElementById('lbl-net').textContent = t('net');
   document.getElementById('lbl-height').textContent = t('height');
-  document.getElementById('lbl-mtp').textContent = t('mtp');
+  document.getElementById('lbl-mtp').innerHTML = t('mtp') + ' <span class="help-tip" id="mtp-tip" title="' + t('mtpTip').replace(/"/g, '&quot;') + '">?</span>';
   document.getElementById('lbl-retained').textContent = t('retained');
   document.getElementById('lbl-scheduled').textContent = t('scheduled');
   document.getElementById('lbl-connections').textContent = t('connections');
+  document.getElementById('lbl-connections').title = t('connectionsTip');
   document.getElementById('btn-import').textContent = t('importTx');
 
   // Settings tab
   document.getElementById('set-title-upstream').textContent = t('setUpstream');
+  document.getElementById('set-upstream-desc').textContent = t('setUpstreamDesc');
   document.getElementById('set-title-vault').textContent = t('setVault');
   document.getElementById('set-title-prefs').textContent = t('setPrefs');
   document.getElementById('set-npub-help').textContent = t('setNpubHelp');
@@ -177,6 +191,8 @@ function applyLang() {
   document.getElementById('set-lbl-port').textContent = t('setPort');
   document.getElementById('set-lbl-lang').textContent = t('setLang');
   document.getElementById('set-lbl-unit').textContent = t('setUnit');
+  document.getElementById('set-title-behavior').textContent = t('setBehavior');
+  document.getElementById('set-behavior-desc').textContent = t('setBehaviorDesc');
   document.getElementById('set-lbl-auto-locktime').textContent = t('autoLocktime');
   document.getElementById('manual-conn-summary').textContent = t('manualConn');
   const saveNpubBtn = document.getElementById('btn-save-npub');
@@ -1258,7 +1274,7 @@ async function discoverUpstreams() {
     const cards = online.map(s => {
       const net = s.network && s.network !== 'unknown'
         ? s.network.charAt(0).toUpperCase() + s.network.slice(1) : '';
-      const netColor = s.network === 'signet' ? 'var(--signet)' : s.network === 'testnet' ? 'var(--testnet)' : 'var(--text)';
+      const netColor = s.network === 'mainnet' ? 'var(--mainnet)' : s.network === 'signet' ? 'var(--signet)' : s.network === 'testnet' ? 'var(--testnet)' : 'var(--text)';
       return `<button class="server-card" onclick="connectToUpstream('${s.host}',${s.port},${s.ssl})" title="${s.host}:${s.port}">
         <span class="server-dot">\u{1F7E2}</span>
         <span class="server-name">${s.name}</span>

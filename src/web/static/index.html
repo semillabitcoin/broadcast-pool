@@ -41,7 +41,7 @@
         <span class="status-value" id="s-height">--</span>
       </div>
       <div class="status-item">
-        <span class="status-label" id="lbl-mtp" title="">MTP</span>
+        <span class="status-label" id="lbl-mtp" title="">MTP <span class="help-tip" id="mtp-tip">?</span></span>
         <span class="status-value" style="font-size:14px" id="s-mtp">--</span>
       </div>
       <div class="status-item">
@@ -53,7 +53,7 @@
         <span class="status-value" id="s-scheduled">0</span>
       </div>
       <div class="status-item">
-        <span class="status-label" id="lbl-connections">Wallets</span>
+        <span class="status-label" id="lbl-connections">Conexiones</span>
         <span class="status-value" id="s-connections">0</span>
       </div>
     </div>
@@ -160,9 +160,10 @@
   <!-- ===================== SETTINGS TAB ===================== -->
   <div id="tab-settings" class="tab-content">
 
-    <!-- Upstream Connection -->
+    <!-- 1. Upstream Connection -->
     <div class="settings-section">
-      <h3 class="settings-title" id="set-title-upstream">Conexión a servidor Electrum</h3>
+      <h3 class="settings-title" id="set-title-upstream">1. Conecta Broadcast Pool a un servidor Electrum</h3>
+      <p class="settings-help" id="set-upstream-desc"></p>
       <div id="current-upstream" style="font-size:13px;color:var(--text-muted);margin-bottom:12px;"></div>
       <div id="discovered-servers" style="margin-bottom:12px;"></div>
       <details id="manual-conn" class="manual-connection">
@@ -188,10 +189,10 @@
       </details>
     </div>
 
-    <!-- Wallet Connection -->
+    <!-- 2. How to accumulate transactions -->
     <div class="settings-section">
-      <h3 class="settings-title" id="set-title-connect">Cómo conectar tu wallet</h3>
-      <p class="settings-help" id="set-connect-desc">Configura tu wallet para usar Broadcast Pool como servidor Electrum. Las transacciones se retendrán hasta que las programes.</p>
+      <h3 class="settings-title" id="set-title-connect">2. Cómo acumular transacciones</h3>
+      <p class="settings-help" id="set-connect-desc"></p>
       <div id="connect-info" class="connect-info">
         <div class="connect-row">
           <span class="connect-label" id="connect-lbl-lan">Red local</span>
@@ -201,9 +202,24 @@
       </div>
     </div>
 
-    <!-- Vault (npub) -->
+    <!-- 3. Behavior -->
     <div class="settings-section">
-      <h3 class="settings-title" id="set-title-vault">Bóveda cifrada (Nostr)</h3>
+      <h3 class="settings-title" id="set-title-behavior">3. Comportamiento</h3>
+      <div class="behavior-item">
+        <span class="behavior-bullet">&#x2022;</span>
+        <div>
+          <p class="settings-help" id="set-behavior-desc" style="margin-bottom:6px"></p>
+          <label style="display:flex;align-items:center;gap:8px;font-size:13px;color:var(--text-muted);cursor:pointer">
+            <input type="checkbox" id="set-auto-locktime" checked onchange="savePrefAutoLocktime(this.checked)">
+            <span id="set-lbl-auto-locktime">Auto agendar transacciones con locktime futuro</span>
+          </label>
+        </div>
+      </div>
+    </div>
+
+    <!-- 4. Vault (npub) -->
+    <div class="settings-section">
+      <h3 class="settings-title" id="set-title-vault">4. Bóveda cifrada (Nostr)</h3>
       <p class="settings-help" id="set-npub-help"></p>
       <p class="settings-help" id="set-npub-help2"></p>
       <div class="settings-row">
@@ -216,9 +232,9 @@
       <p class="settings-help" id="set-npub-warn" style="margin-top:4px"></p>
     </div>
 
-    <!-- Preferences -->
+    <!-- 5. Preferences -->
     <div class="settings-section">
-      <h3 class="settings-title" id="set-title-prefs">Preferencias</h3>
+      <h3 class="settings-title" id="set-title-prefs">5. Otras preferencias</h3>
       <div class="settings-row">
         <label class="settings-label" id="set-lbl-lang">Idioma</label>
         <select id="set-lang" class="inline-edit" style="width:120px;padding:6px 8px" onchange="savePrefLang(this.value)">
@@ -232,12 +248,6 @@
           <option value="btc">BTC</option>
           <option value="sats">sats</option>
         </select>
-      </div>
-      <div class="settings-row" style="margin-top:8px">
-        <label style="display:flex;align-items:center;gap:8px;font-size:13px;color:var(--text-muted);cursor:pointer">
-          <input type="checkbox" id="set-auto-locktime" checked onchange="savePrefAutoLocktime(this.checked)">
-          <span id="set-lbl-auto-locktime">Auto agendar transacciones con locktime futuro</span>
-        </label>
       </div>
     </div>
   </div>
