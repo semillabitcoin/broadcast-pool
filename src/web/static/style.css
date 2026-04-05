@@ -297,6 +297,7 @@ button:disabled { opacity: 0.4; cursor: not-allowed; }
   margin-top: -8px;
 }
 .target-edit:hover { opacity: 1; }
+.target-price-btn { font-weight: 700; font-size: 14px; }
 
 /* Locktime lock */
 .cell-status { position: relative; }

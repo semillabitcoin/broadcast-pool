@@ -7,6 +7,8 @@ import logging
 import struct
 from datetime import datetime, timedelta
 
+import aiohttp
+
 from src.pool.store import TxStore
 from src.proxy.upstream import UpstreamConnection
 from src import config
@@ -25,6 +27,8 @@ class Scheduler:
         self._upstream: UpstreamConnection | None = None
         self._running = False
         self._reconnect_event = asyncio.Event()
+        self._price_task: asyncio.Task | None = None
+        self._current_price: float | None = None
 
     async def start(self) -> None:
         self._running = True
@@ -42,6 +46,8 @@ class Scheduler:
 
     async def stop(self) -> None:
         self._running = False
+        if self._price_task:
+            self._price_task.cancel()
         if self._upstream:
             await self._upstream.close()
 
@@ -107,6 +113,11 @@ class Scheduler:
         # Set up notification handler for new blocks
         self._upstream.set_notification_callback(self._handle_notification)
 
+        # Start price poller if configured
+        if self._price_task:
+            self._price_task.cancel()
+        self._price_task = asyncio.create_task(self._price_poller())
+
         # Keep alive — break immediately on reconnect request
         self._reconnect_event.clear()
         while self._running:
@@ -158,6 +169,9 @@ class Scheduler:
         # Detect UTXO conflicts
         await self._detect_conflicts()
 
+        # Check price-triggered txs
+        await self._check_price_triggers()
+
         # Resolve unresolved inputs (retry for txs missing confirmed_height)
         await self._resolve_pending_inputs()
 
@@ -166,6 +180,72 @@ class Scheduler:
             purged = self.store.purge_confirmed(height, config.PURGE_AFTER_BLOCKS)
             if purged:
                 log.info("Purged %d confirmed tx(s) at depth %d+", purged, config.PURGE_AFTER_BLOCKS)
+
+    async def _price_poller(self) -> None:
+        """Poll price source every 30s and store current price."""
+        while self._running:
+            try:
+                source = self.store.get_state("price_source") or ""
+                if not source:
+                    await asyncio.sleep(30)
+                    continue
+
+                price = await self._fetch_price(source)
+                if price and price > 0:
+                    self._current_price = price
+                    self.store.set_state("current_price", str(price))
+            except asyncio.CancelledError:
+                break
+            except Exception as e:
+                log.debug("Price poll error: %s", e)
+            await asyncio.sleep(30)
+
+    async def _fetch_price(self, source: str) -> float | None:
+        """Fetch BTC/USD price from configured source."""
+        try:
+            async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=10)) as session:
+                if source == "coingecko":
+                    url = "https://api.coingecko.com/api/v3/simple/price?ids=bitcoin&vs_currencies=usd"
+                    async with session.get(url) as resp:
+                        data = await resp.json()
+                        return float(data["bitcoin"]["usd"])
+                else:
+                    # Local oracle or custom URL — expects {price_usd: N} or {bitcoin: {usd: N}}
+                    url = source.rstrip("/") + "/api/price/latest"
+                    async with session.get(url) as resp:
+                        data = await resp.json()
+                        return float(data.get("price_usd", 0))
+        except Exception as e:
+            log.debug("Price fetch failed from %s: %s", source, e)
+            return None
+
+    async def _check_price_triggers(self) -> None:
+        """Broadcast txs whose price trigger has been hit."""
+        if not self._current_price:
+            return
+
+        price_txs = self.store.get_price_scheduled_txs()
+        if not price_txs:
+            return
+
+        for tx in price_txs:
+            if not tx.target_price:
+                continue
+
+            triggered = False
+            if tx.price_direction == "below" and self._current_price <= tx.target_price:
+                triggered = True
+            elif tx.price_direction == "above" and self._current_price >= tx.target_price:
+                triggered = True
+
+            if triggered:
+                log.info(
+                    "Price trigger: BTC $%.0f %s $%.0f — broadcasting %s",
+                    self._current_price, tx.price_direction, tx.target_price, tx.txid[:16],
+                )
+                result = await self._do_broadcast(tx)
+                if "error" not in result:
+                    log.info("Price-triggered broadcast of %s", tx.txid[:16])
 
     async def _do_broadcast(self, tx, _depth=0) -> dict:
         """Broadcast a single transaction to upstream. Respects dependency order."""

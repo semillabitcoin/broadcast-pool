@@ -56,6 +56,10 @@
         <span class="status-label" id="lbl-connections">Conexiones</span>
         <span class="status-value" id="s-connections">0</span>
       </div>
+      <div class="status-item" id="status-price" style="display:none">
+        <span class="status-label">BTC/USD</span>
+        <span class="status-value" style="font-size:16px;color:var(--mainnet)" id="s-price">--</span>
+      </div>
     </div>
 
     <div class="actions-bar">
@@ -205,6 +209,7 @@
     <!-- 3. Behavior -->
     <div class="settings-section">
       <h3 class="settings-title" id="set-title-behavior">3. Comportamiento</h3>
+
       <div class="behavior-item">
         <span class="behavior-bullet">&#x2022;</span>
         <div>
@@ -213,6 +218,31 @@
             <input type="checkbox" id="set-auto-locktime" checked onchange="savePrefAutoLocktime(this.checked)">
             <span id="set-lbl-auto-locktime">Auto agendar transacciones con locktime futuro</span>
           </label>
+        </div>
+      </div>
+
+      <div class="behavior-item">
+        <span class="behavior-bullet">&#x2022;</span>
+        <div>
+          <p class="settings-help" id="set-price-desc" style="margin-bottom:6px"></p>
+          <label style="display:flex;align-items:center;gap:8px;font-size:13px;color:var(--text-muted);cursor:pointer;margin-bottom:8px">
+            <input type="checkbox" id="set-price-enabled" onchange="togglePriceSource(this.checked)">
+            <span id="set-lbl-price-enabled">Activar retransmisión por precio</span>
+          </label>
+          <div id="price-source-config" style="display:none;margin-left:24px">
+            <div class="settings-row">
+              <label class="settings-label" id="set-lbl-price-source">Fuente</label>
+              <select id="set-price-source" class="inline-edit" style="width:200px;padding:6px 8px" onchange="savePriceSource(this.value)">
+                <option value="" id="opt-price-none">Seleccionar...</option>
+                <option value="coingecko">CoinGecko API</option>
+                <option value="custom" id="opt-price-custom">Oráculo local</option>
+              </select>
+            </div>
+            <div id="price-custom-url" class="settings-row" style="display:none">
+              <label class="settings-label">URL</label>
+              <input type="text" id="set-price-url" class="inline-edit" style="width:280px" placeholder="http://umbrel.local:3200" onchange="savePriceSource('custom')">
+            </div>
+          </div>
         </div>
       </div>
     </div>

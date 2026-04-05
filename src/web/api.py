@@ -84,6 +84,8 @@ def create_app(store: TxStore, proxy_server=None, scheduler=None) -> web.Applica
     app.router.add_get("/api/discover-upstreams", handle_discover_upstreams)
     app.router.add_post("/api/npub", handle_set_npub)
     app.router.add_post("/api/preferences", handle_set_preferences)
+    app.router.add_post("/api/txs/{txid}/schedule-price", handle_schedule_price)
+    app.router.add_get("/api/price", handle_get_price)
     app.router.add_get("/api/vault", handle_vault)
     app.router.add_post("/api/vault/clear", handle_vault_clear)
     app.router.add_get("/api/conflicts", handle_conflicts)
@@ -175,6 +177,8 @@ def _tx_to_dict(tx, current_height: int = 0, store: TxStore = None) -> dict:
         "wallet_label": tx.wallet_label,
         "status": tx.status,
         "target_block": tx.target_block,
+        "target_price": tx.target_price,
+        "price_direction": tx.price_direction,
         "blocks_remaining": blocks_remaining,
         "oldest_coin_age": oldest_coin_age,
         "sort_order": tx.sort_order,
@@ -303,7 +307,7 @@ async def handle_unschedule(request: web.Request) -> web.Response:
 
     with store._lock:
         store._conn.execute(
-            "UPDATE retained_txs SET status='pending', target_block=NULL, updated_at=datetime('now') WHERE txid=?",
+            "UPDATE retained_txs SET status='pending', target_block=NULL, target_price=NULL, price_direction=NULL, updated_at=datetime('now') WHERE txid=?",
             (txid,),
         )
         store._conn.commit()
@@ -594,6 +598,8 @@ async def handle_status(request: web.Request) -> web.Response:
         "confirmed": len(store.get_all_txs(status="confirmed")),
         "failed": len(store.get_all_txs(status="failed")),
         "proxy_port": config.PROXY_PORT,
+        "current_price": float(store.get_state("current_price") or 0) or None,
+        "price_source": store.get_state("price_source") or "",
     }
     return web.json_response(data)
 
@@ -608,6 +614,8 @@ async def handle_get_settings(request: web.Request) -> web.Response:
         "network": store.get_detected_network(),
         "npub": store.get_state("npub") or "",
         "auto_schedule_locktime": store.get_state("auto_schedule_locktime") != "false",
+        "price_source": store.get_state("price_source") or "",
+        "price_enabled": bool(store.get_state("price_source")),
     })
 
 
@@ -850,7 +858,48 @@ async def handle_set_preferences(request: web.Request) -> web.Response:
         val = "true" if body["auto_schedule_locktime"] else "false"
         store.set_state("auto_schedule_locktime", val)
 
+    if "price_source" in body:
+        source = body["price_source"].strip()
+        store.set_state("price_source", source)
+        if not source:
+            store.set_state("current_price", "")
+
     return web.json_response({"ok": True})
+
+
+async def handle_schedule_price(request: web.Request) -> web.Response:
+    """Schedule a tx to broadcast when price crosses a threshold."""
+    store: TxStore = request.app["store"]
+    txid = request.match_info["txid"]
+    body = await request.json()
+
+    price = body.get("target_price")
+    direction = body.get("direction", "below")
+
+    if not price or not isinstance(price, (int, float)) or price <= 0:
+        return web.json_response({"error": "target_price (positive number) required"}, status=400)
+
+    if direction not in ("below", "above"):
+        return web.json_response({"error": "direction must be 'below' or 'above'"}, status=400)
+
+    tx = store.get_tx(txid)
+    if not tx:
+        return web.json_response({"error": "Transaction not found"}, status=404)
+
+    store.update_target_price(txid, float(price), direction)
+    log.info("Price-scheduled tx %s: %s $%.0f", txid[:16], direction, price)
+
+    return web.json_response({"ok": True, "target_price": price, "direction": direction})
+
+
+async def handle_get_price(request: web.Request) -> web.Response:
+    """Return current BTC/USD price and source config."""
+    store: TxStore = request.app["store"]
+    price_raw = store.get_state("current_price")
+    return web.json_response({
+        "price_usd": float(price_raw) if price_raw else None,
+        "source": store.get_state("price_source") or "",
+    })
 
 
 async def handle_vault(request: web.Request) -> web.Response:

@@ -68,6 +68,10 @@ const i18n = {
     connectLan: 'Red local',
     copied: 'copiado',
     autoLocktime: 'Auto agendar transacciones con locktime futuro',
+    priceDesc: 'Retransmitir transacciones autom\u00e1ticamente cuando el precio de Bitcoin cruce un umbral. Pensado para enviar colateral adicional a contratos de pr\u00e9stamo y evitar liquidaciones:',
+    priceEnabled: 'Activar retransmisi\u00f3n por precio',
+    priceSource: 'Fuente', priceNone: 'Seleccionar...', priceCustom: 'Or\u00e1culo local',
+    priceSchedule: 'Retransmitir si BTC', priceBelow: 'cae por debajo de', priceAbove: 'sube por encima de',
     vaultNoNpub: 'Configura tu npub', vaultNoNpubDesc: 'Ve a Ajustes y pega tu npub para activar la b\u00f3veda cifrada',
     vaultNoExt: 'Extensi\u00f3n NIP-07 requerida', vaultNoExtDesc: 'Instala Alby o nos2x para descifrar la b\u00f3veda',
     vaultDecrypting: 'Descifrando...', vaultDecrypted: 'entradas descifradas',
@@ -137,6 +141,10 @@ const i18n = {
     connectLan: 'Local network',
     copied: 'copied',
     autoLocktime: 'Auto-schedule transactions with future locktime',
+    priceDesc: 'Automatically broadcast transactions when the Bitcoin price crosses a threshold. Designed to send additional collateral to loan contracts and avoid liquidations:',
+    priceEnabled: 'Enable price-based broadcast',
+    priceSource: 'Source', priceNone: 'Select...', priceCustom: 'Local oracle',
+    priceSchedule: 'Broadcast if BTC', priceBelow: 'drops below', priceAbove: 'rises above',
     vaultNoNpub: 'Set up your npub', vaultNoNpubDesc: 'Go to Settings and paste your npub to enable the encrypted vault',
     vaultNoExt: 'NIP-07 extension required', vaultNoExtDesc: 'Install Alby or nos2x to decrypt the vault',
     vaultDecrypting: 'Decrypting...', vaultDecrypted: 'entries decrypted',
@@ -194,6 +202,11 @@ function applyLang() {
   document.getElementById('set-title-behavior').textContent = t('setBehavior');
   document.getElementById('set-behavior-desc').textContent = t('setBehaviorDesc');
   document.getElementById('set-lbl-auto-locktime').textContent = t('autoLocktime');
+  document.getElementById('set-price-desc').textContent = t('priceDesc');
+  document.getElementById('set-lbl-price-enabled').textContent = t('priceEnabled');
+  document.getElementById('set-lbl-price-source').textContent = t('priceSource');
+  document.getElementById('opt-price-none').textContent = t('priceNone');
+  document.getElementById('opt-price-custom').textContent = t('priceCustom');
   document.getElementById('manual-conn-summary').textContent = t('manualConn');
   const saveNpubBtn = document.getElementById('btn-save-npub');
   if (saveNpubBtn && saveNpubBtn.style.display !== 'none') saveNpubBtn.textContent = t('saveNpub');
@@ -308,6 +321,15 @@ function updateStatus(s) {
   const aaBase = document.getElementById('aa-base');
   if (!aaBase.value && s.current_height) {
     aaBase.value = s.current_height + 6;
+  }
+
+  // Price display
+  const priceEl = document.getElementById('status-price');
+  if (s.current_price && s.price_source) {
+    priceEl.style.display = '';
+    document.getElementById('s-price').textContent = '$' + Math.round(s.current_price).toLocaleString();
+  } else {
+    priceEl.style.display = 'none';
   }
 }
 
@@ -455,13 +477,29 @@ function renderActiveRow(tx, height) {
   const coinAge = coinAgeHTML(tx, height);
   const blocksRem = tx.blocks_remaining != null ? tx.blocks_remaining.toLocaleString() : '';
 
-  const isMtpScheduled = tx.status === 'scheduled' && !tx.target_block
+  const isMtpScheduled = tx.status === 'scheduled' && !tx.target_block && !tx.target_price
     && tx.locktime && tx.locktime.type === 'timestamp';
   const isBlockScheduled = tx.status === 'scheduled' && tx.target_block;
+  const isPriceScheduled = tx.status === 'scheduled' && tx.target_price;
   const isPending = tx.status === 'pending';
 
+  const priceActive = currentStatus.price_source;
+  const priceBtnHtml = priceActive
+    ? `<button class="target-cal target-price-btn" onclick="showPricePicker('${tx.txid_full}')" title="$" style="right:24px;color:var(--mainnet)">$</button>`
+    : '';
+
   let targetCell;
-  if (isMtpScheduled) {
+  if (isPriceScheduled) {
+    // Price scheduled: show price threshold + pencil
+    const dir = tx.price_direction === 'above' ? '↑' : '↓';
+    const dirLabel = tx.price_direction === 'above'
+      ? (lang === 'es' ? 'sube de' : 'above')
+      : (lang === 'es' ? 'baja de' : 'below');
+    targetCell = `<div class="target-cell">
+      <span style="font-size:12px;color:var(--mainnet)">${dir} $${Math.round(tx.target_price).toLocaleString()}</span>
+      <span class="target-edit" onclick="unschedule('${tx.txid_full}')" title="${lang==='es'?'Modificar':'Edit'}">&#9998;</span>
+    </div>`;
+  } else if (isMtpScheduled) {
     // MTP scheduled: show date + pencil to edit
     targetCell = `<div class="target-cell">
       <span style="font-size:12px;color:var(--green)">MTP: ${tx.locktime.date}</span>
@@ -476,13 +514,14 @@ function renderActiveRow(tx, height) {
       <span class="target-edit" onclick="unschedule('${tx.txid_full}')" title="${lang==='es'?'Modificar':'Edit'}">&#9998;</span>
     </div>`;
   } else if (isPending || editable) {
-    // Pending: input + OK + calendar
+    // Pending: input + OK + calendar + $ (if price enabled)
     targetCell = `<div class="target-cell">
       <input class="target-input" type="text" inputmode="numeric" pattern="[0-9]*"
         id="blk-${tx.txid_full}" value="${val}" placeholder="--"
         oninput="onTargetInput('${tx.txid_full}')"
         onkeydown="if(event.key==='Enter')schedule('${tx.txid_full}')">
       <button class="target-ok" id="ok-${tx.txid_full}" onclick="schedule('${tx.txid_full}')">OK</button>
+      ${priceBtnHtml}
       <button class="target-cal" onclick="showDatePicker('${tx.txid_full}')" title="Fecha">&#128197;</button>
     </div>`;
   } else {
@@ -1176,6 +1215,22 @@ async function loadSettingsTab() {
   document.getElementById('set-unit').value = unit;
   document.getElementById('set-auto-locktime').checked = s.auto_schedule_locktime !== false;
 
+  // Price
+  const priceEnabled = !!s.price_source;
+  document.getElementById('set-price-enabled').checked = priceEnabled;
+  document.getElementById('price-source-config').style.display = priceEnabled ? 'block' : 'none';
+  if (s.price_source === 'coingecko') {
+    document.getElementById('set-price-source').value = 'coingecko';
+    document.getElementById('price-custom-url').style.display = 'none';
+  } else if (s.price_source) {
+    document.getElementById('set-price-source').value = 'custom';
+    document.getElementById('set-price-url').value = s.price_source;
+    document.getElementById('price-custom-url').style.display = 'block';
+  } else {
+    document.getElementById('set-price-source').value = '';
+    document.getElementById('price-custom-url').style.display = 'none';
+  }
+
   // Connection info (uses status endpoint for proxy_port + hidden_service)
   loadConnectInfo(currentStatus);
 
@@ -1494,6 +1549,70 @@ function savePrefAutoLocktime(checked) {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ auto_schedule_locktime: checked }),
   });
+}
+
+function togglePriceSource(enabled) {
+  document.getElementById('price-source-config').style.display = enabled ? 'block' : 'none';
+  if (!enabled) {
+    document.getElementById('set-price-source').value = '';
+    savePriceSource('');
+  }
+}
+
+function savePriceSource(val) {
+  let source = val;
+  if (val === 'custom') {
+    const url = document.getElementById('set-price-url').value.trim();
+    source = url || '';
+    document.getElementById('price-custom-url').style.display = 'block';
+  } else {
+    document.getElementById('price-custom-url').style.display = 'none';
+  }
+
+  fetchJSON('/api/preferences', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ price_source: source }),
+  });
+}
+
+function showPricePicker(txid) {
+  const existing = document.getElementById('pricepicker-' + txid);
+  if (existing) { existing.remove(); return; }
+
+  const row = document.getElementById('blk-' + txid).closest('tr');
+  const picker = document.createElement('tr');
+  picker.id = 'pricepicker-' + txid;
+  picker.innerHTML = `<td colspan="9" style="background:var(--bg-card);padding:12px;border-bottom:1px solid var(--border)">
+    <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap;justify-content:flex-end">
+      <label style="font-size:13px;color:var(--text-muted)">${t('priceSchedule')}</label>
+      <select id="price-dir-${txid}" class="inline-edit" style="width:auto;padding:4px 8px">
+        <option value="below">${t('priceBelow')}</option>
+        <option value="above">${t('priceAbove')}</option>
+      </select>
+      <span style="color:var(--mainnet);font-weight:600">$</span>
+      <input type="number" id="price-val-${txid}" class="inline-edit" style="width:120px" placeholder="50000">
+      <button class="small" onclick="scheduleByPrice('${txid}')">OK</button>
+      <button class="small secondary" onclick="document.getElementById('pricepicker-${txid}').remove()">${t('close')}</button>
+    </div>
+  </td>`;
+  row.after(picker);
+}
+
+async function scheduleByPrice(txid) {
+  const price = parseFloat(document.getElementById('price-val-' + txid).value);
+  const dir = document.getElementById('price-dir-' + txid).value;
+  if (!price || price <= 0) return;
+
+  await fetchJSON('/api/txs/' + txid + '/schedule-price', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ target_price: price, direction: dir }),
+  });
+
+  const picker = document.getElementById('pricepicker-' + txid);
+  if (picker) picker.remove();
+  refresh();
 }
 
 // --- Vault tab ---

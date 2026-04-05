@@ -24,6 +24,8 @@ class RetainedTx:
     wallet_label: str
     status: str
     target_block: int | None
+    target_price: float | None
+    price_direction: str | None
     sort_order: int
     error_message: str | None
     confirmed_block: int | None
@@ -298,6 +300,27 @@ class TxStore:
                     (target_block, txid),
                 )
             self._conn.commit()
+
+    def update_target_price(self, txid: str, price: float, direction: str = "below") -> None:
+        with self._lock:
+            self._conn.execute(
+                """UPDATE retained_txs
+                   SET target_price = ?, price_direction = ?, status = 'scheduled',
+                       updated_at = datetime('now')
+                   WHERE txid = ?""",
+                (price, direction, txid),
+            )
+            self._conn.commit()
+
+    def get_price_scheduled_txs(self) -> list["RetainedTx"]:
+        """Get txs scheduled by price trigger for active network."""
+        rows = self._conn.execute(
+            """SELECT * FROM retained_txs
+               WHERE network = ? AND status = 'scheduled' AND target_price IS NOT NULL
+               ORDER BY sort_order""",
+            (self.network,),
+        ).fetchall()
+        return [RetainedTx(**dict(r)) for r in rows]
 
     def update_broadcast_time(self, txid: str) -> None:
         with self._lock:
