@@ -922,9 +922,9 @@ async def handle_discover_price_oracle(request: web.Request) -> web.Response:
     import aiohttp as aio
 
     candidates = [
-        {"host": "10.21.21.11", "port": 3200, "name": "El Oráculo"},
+        {"host": "10.21.22.61", "port": 3200, "name": "El Oráculo"},
+        {"host": "lunaticoin-price-oracle", "port": 3200, "name": "El Oráculo"},
         {"host": "127.0.0.1", "port": 3200, "name": "El Oráculo"},
-        {"host": "bitcoin-price-oracle", "port": 3200, "name": "El Oráculo"},
     ]
 
     results = []
