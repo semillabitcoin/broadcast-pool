@@ -493,8 +493,9 @@ function renderActiveRow(tx, height) {
 
   let targetCell;
   if (isPriceScheduled) {
-    // Price scheduled: show price threshold + expiry + pencil
+    // Price scheduled: show price threshold + expiry + pencil (if not expired)
     const dir = tx.price_direction === 'above' ? '↑' : '↓';
+    const expired = isExpiredByDate(tx);
     let expiryTag = '';
     if (tx.expires_at) {
       const expDate = new Date(tx.expires_at);
@@ -509,10 +510,11 @@ function renderActiveRow(tx, height) {
         expiryTag = `<span class="target-rem">(${Math.round(remainingMin/1440)}d)</span>`;
       }
     }
+    const editBtn = expired ? '' : `<span class="target-edit" onclick="unschedule('${tx.txid_full}')" title="${lang==='es'?'Modificar':'Edit'}">&#9998;</span>`;
     targetCell = `<div class="target-cell">
       <span class="mono">${dir} $${Math.round(tx.target_price).toLocaleString()}</span>
       ${expiryTag}
-      <span class="target-edit" onclick="unschedule('${tx.txid_full}')" title="${lang==='es'?'Modificar':'Edit'}">&#9998;</span>
+      ${editBtn}
     </div>`;
   } else if (isMtpScheduled) {
     // MTP scheduled: show date + pencil to edit
@@ -814,10 +816,18 @@ function humanizeDuration(totalMinutes) {
   return parts.join(', ');
 }
 
+function isExpiredByDate(tx) {
+  if (!tx.expires_at) return false;
+  return new Date(tx.expires_at) <= Date.now();
+}
+
 function buildActions(tx) {
   const btns = [];
-  if (tx.status === 'pending' || tx.status === 'scheduled') {
+  if ((tx.status === 'pending' || tx.status === 'scheduled') && !isExpiredByDate(tx)) {
     btns.push(`<span class="action-icon send" onclick="broadcastNow('${tx.txid_full}')" title="${t('emit')}"><svg class="plane-icon" viewBox="0 0 24 24"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/></svg></span>`);
+    btns.push(`<span class="action-icon delete" onclick="deleteTx('${tx.txid_full}')" title="${t('delete')}"><svg class="x-icon" viewBox="0 0 24 24"><path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg></span>`);
+  } else if (isExpiredByDate(tx) && tx.status === 'scheduled') {
+    // Only allow delete for visually expired txs
     btns.push(`<span class="action-icon delete" onclick="deleteTx('${tx.txid_full}')" title="${t('delete')}"><svg class="x-icon" viewBox="0 0 24 24"><path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg></span>`);
   }
   if (tx.status === 'failed') {
