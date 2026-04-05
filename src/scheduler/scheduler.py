@@ -66,6 +66,8 @@ class Scheduler:
         tx = self.store.get_tx(txid)
         if not tx:
             return {"error": "Transaction not found"}
+        if tx.status == "expired":
+            return {"error": "Transaction expired — cannot broadcast"}
         if tx.status not in ("pending", "scheduled"):
             return {"error": f"Cannot broadcast tx in status '{tx.status}'"}
 
@@ -253,7 +255,7 @@ class Scheduler:
                     log.info("Price-triggered broadcast of %s", tx.txid[:16])
 
     def _purge_expired_txs(self) -> None:
-        """Delete price-scheduled txs whose expiry has passed."""
+        """Mark price-scheduled txs as expired when their expiry has passed."""
         now = datetime.utcnow().strftime("%Y-%m-%dT%H:%M")
         with self.store._lock:
             rows = self.store._conn.execute(
@@ -263,8 +265,13 @@ class Scheduler:
                 (now, self.store.network),
             ).fetchall()
             for r in rows:
-                self.store._conn.execute("DELETE FROM retained_txs WHERE txid = ?", (r["txid"],))
-                log.info("Expired tx %s purged (past expiry %s)", r["txid"][:16], now)
+                self.store._conn.execute(
+                    """UPDATE retained_txs
+                       SET status = 'expired', updated_at = datetime('now')
+                       WHERE txid = ?""",
+                    (r["txid"],),
+                )
+                log.info("Tx %s expired (past %s)", r["txid"][:16], now)
             if rows:
                 self.store._conn.commit()
 

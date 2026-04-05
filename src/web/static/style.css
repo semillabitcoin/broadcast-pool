@@ -220,6 +220,7 @@ button:disabled { opacity: 0.4; cursor: not-allowed; }
 .badge-failed { background: var(--red); color: #fff; }
 .badge-replaced { background: var(--grey); color: var(--text-muted); text-decoration: line-through; }
 .badge-abandoned { background: transparent; color: var(--text-muted); border: 1px solid var(--border); text-decoration: line-through; }
+.badge-expired { background: transparent; color: var(--text-muted); border: 1px solid var(--border); }
 
 @keyframes pulse {
   0%, 100% { opacity: 1; }

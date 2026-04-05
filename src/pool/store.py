@@ -566,10 +566,10 @@ class TxStore:
                           input_count, output_count, network, wallet_label,
                           status, target_block, confirmed_block, broadcast_at, created_at
                    FROM retained_txs
-                   WHERE status IN ('confirmed', 'abandoned', 'replaced')
+                   WHERE status IN ('confirmed', 'abandoned', 'replaced', 'expired')
                      AND (
                        (confirmed_block IS NOT NULL AND confirmed_block > 0 AND confirmed_block <= ?)
-                       OR (status IN ('abandoned', 'replaced'))
+                       OR (status IN ('abandoned', 'replaced', 'expired'))
                      )""",
                 (current_height - after_blocks,),
             ).fetchall()

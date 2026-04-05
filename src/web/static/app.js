@@ -32,7 +32,7 @@ const i18n = {
     thTarget: 'Retransmitir en', thActions: 'Acciones', thBlock: 'Bloque',
     confirmed_title: 'Retransmitidas \u00faltimo bloque',
     st_pending: 'pendiente', st_scheduled: 'programada', st_broadcasting: 'retransmitida',
-    st_confirmed: 'confirmada', st_failed: 'fallida', st_replaced: 'reemplazada', st_abandoned: 'abandonada',
+    st_confirmed: 'confirmada', st_failed: 'fallida', st_replaced: 'reemplazada', st_abandoned: 'abandonada', st_expired: 'expirada',
     st_rotating: ['Retransmitida', 'esperando', 'confirmación'],
     emit: 'Emitir ahora', delete: 'Eliminar', retry: 'Reintentar',
     emitConfirm: 'Emitir esta transaccion ahora?',
@@ -108,7 +108,7 @@ const i18n = {
     thTarget: 'Broadcast at', thActions: 'Actions', thBlock: 'Block',
     confirmed_title: 'Broadcast last block',
     st_pending: 'pending', st_scheduled: 'scheduled', st_broadcasting: 'broadcast',
-    st_confirmed: 'confirmed', st_failed: 'failed', st_replaced: 'replaced', st_abandoned: 'abandoned',
+    st_confirmed: 'confirmed', st_failed: 'failed', st_replaced: 'replaced', st_abandoned: 'abandoned', st_expired: 'expired',
     st_rotating: ['Broadcasted', 'waiting', 'confirmation'],
     emit: 'Broadcast now', delete: 'Delete', retry: 'Retry',
     emitConfirm: 'Broadcast this transaction now?',
@@ -347,7 +347,7 @@ function renderTable(txs, height) {
   const confirmedSection = document.getElementById('confirmed-section');
   const confirmedBody = document.getElementById('confirmed-body');
 
-  const historyStatuses = new Set(['confirmed', 'replaced', 'abandoned']);
+  const historyStatuses = new Set(['confirmed', 'replaced', 'abandoned', 'expired']);
   const activeTxs = txs.filter(tx => !historyStatuses.has(tx.status));
   const confirmedTxs = txs.filter(tx => historyStatuses.has(tx.status));
 
@@ -498,13 +498,15 @@ function renderActiveRow(tx, height) {
     let expiryTag = '';
     if (tx.expires_at) {
       const expDate = new Date(tx.expires_at);
-      const remaining = Math.round((expDate - Date.now()) / 3600000);
-      if (remaining <= 0) {
+      const remainingMin = Math.round((expDate - Date.now()) / 60000);
+      if (remainingMin <= 0) {
         expiryTag = `<span class="target-rem" style="color:var(--red)">(${t('priceExpired')})</span>`;
-      } else if (remaining < 24) {
-        expiryTag = `<span class="target-rem">(${remaining}h)</span>`;
+      } else if (remainingMin < 60) {
+        expiryTag = `<span class="target-rem">(${remainingMin}min)</span>`;
+      } else if (remainingMin < 1440) {
+        expiryTag = `<span class="target-rem">(${Math.round(remainingMin/60)}h)</span>`;
       } else {
-        expiryTag = `<span class="target-rem">(${Math.round(remaining/24)}d)</span>`;
+        expiryTag = `<span class="target-rem">(${Math.round(remainingMin/1440)}d)</span>`;
       }
     }
     targetCell = `<div class="target-cell">
@@ -704,6 +706,7 @@ function badgeHTML(status, txid) {
     failed: t('st_failed'),
     replaced: t('st_replaced'),
     abandoned: t('st_abandoned'),
+    expired: t('st_expired'),
   };
 
   if (status === 'broadcasting') {
