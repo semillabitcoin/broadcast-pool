@@ -9,7 +9,7 @@ ELECTRUM_SSL = os.environ.get("ELECTRUM_SSL", "false").lower() in ("true", "1", 
 ELECTRUM_SSL_NOVERIFY = os.environ.get("ELECTRUM_SSL_NOVERIFY", "false").lower() in ("true", "1", "yes")
 
 PROXY_PORT = int(os.environ.get("PROXY_PORT", "50005"))
-WEB_PORT = int(os.environ.get("WEB_PORT", "3080"))
+WEB_PORT = int(os.environ.get("WEB_PORT", "4040"))
 
 DB_PATH = os.environ.get("DB_PATH", "data/pool.db")
 
