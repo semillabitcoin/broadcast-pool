@@ -313,7 +313,7 @@ function updateStatus(s) {
   if (s.current_mtp) {
     const mtpDate = new Date(s.current_mtp * 1000);
     const lagMin = Math.round((Date.now() - mtpDate.getTime()) / 60000);
-    document.getElementById('s-mtp').textContent = mtpDate.toLocaleString();
+    document.getElementById('s-mtp').textContent = mtpDate.toLocaleDateString(undefined, {day:'numeric',month:'short'}) + ' ' + mtpDate.toLocaleTimeString(undefined, {hour:'2-digit',minute:'2-digit'});
     const mtpTip = lang === 'es'
       ? `Median Time Past: mediana de los timestamps de los ultimos 11 bloques.\nEs el reloj de Bitcoin para timelocks.\nLag actual: ${lagMin} min respecto al reloj del sistema.\nUnix: ${s.current_mtp}`
       : `Median Time Past: median of last 11 block timestamps.\nBitcoin's clock for timelocks.\nCurrent lag: ${lagMin} min vs system clock.\nUnix: ${s.current_mtp}`;
