@@ -9,6 +9,7 @@ let activeTab = 'pool';
 let currentNpub = '';
 let vaultDecrypted = [];
 let vaultSort = { field: null, asc: true };
+let discoveredServers = [];
 
 const i18n = {
   es: {
@@ -1136,10 +1137,10 @@ function updateVaultTabVisibility() {
 async function loadSettingsTab() {
   const s = await fetchJSON('/api/settings');
 
-  // Show current upstream connection
+  // Show current upstream connection (friendly label updated after discover)
   const curEl = document.getElementById('current-upstream');
   if (s.upstream_host) {
-    curEl.textContent = `${t('currentUpstream')} ${s.upstream_host}:${s.upstream_port}${s.upstream_ssl ? ' (SSL)' : ''}`;
+    curEl.textContent = `${t('currentUpstream')} ${upstreamLabel(s.upstream_host, s.upstream_port, s.upstream_ssl)}`;
   } else {
     curEl.textContent = '';
   }
@@ -1245,6 +1246,7 @@ async function discoverUpstreams() {
   try {
     const data = await fetchJSON('/api/discover-upstreams');
     const online = data.servers.filter(s => s.online);
+    discoveredServers = online;
 
     if (online.length === 0) {
       container.innerHTML = `<span style="font-size:12px;color:var(--text-muted)">${t('noServers')}</span>`;
@@ -1255,18 +1257,45 @@ async function discoverUpstreams() {
       const net = s.network && s.network !== 'unknown'
         ? s.network.charAt(0).toUpperCase() + s.network.slice(1) : '';
       const netColor = s.network === 'signet' ? 'var(--signet)' : s.network === 'testnet' ? 'var(--testnet)' : 'var(--text)';
-      return `<button class="server-card" onclick="connectToUpstream('${s.host}',${s.port},${s.ssl})" title="${s.server_version || ''}">
+      return `<button class="server-card" onclick="connectToUpstream('${s.host}',${s.port},${s.ssl})" title="${s.host}:${s.port}">
         <span class="server-dot">\u{1F7E2}</span>
         <span class="server-name">${s.name}</span>
         <span class="server-net" style="color:${netColor}">${net}</span>
-        <span class="server-addr">${s.host}:${s.port}</span>
       </button>`;
     }).join('');
 
     container.innerHTML = `<div style="font-size:12px;color:var(--text-muted);margin-bottom:6px">${t('localServers')}</div>
       <div style="display:flex;gap:8px;flex-wrap:wrap">${cards}</div>`;
+
+    // Update current-upstream label now that we know server names
+    updateUpstreamLabel();
   } catch {
     container.innerHTML = '';
+  }
+}
+
+function upstreamLabel(host, port, ssl) {
+  const match = discoveredServers.find(s => s.host === host && s.port === port);
+  if (match) {
+    const net = match.network && match.network !== 'unknown'
+      ? ' ' + match.network.charAt(0).toUpperCase() + match.network.slice(1) : '';
+    return `${match.name}${net} (local)`;
+  }
+  // External server — show address + network from status
+  const net = currentStatus.network;
+  const netStr = net && net !== 'unknown'
+    ? ' — ' + net.charAt(0).toUpperCase() + net.slice(1) : '';
+  return `${host}:${port}${netStr}`;
+}
+
+function updateUpstreamLabel() {
+  const curEl = document.getElementById('current-upstream');
+  if (!curEl) return;
+  const host = currentStatus.upstream_host;
+  const port = currentStatus.upstream_port;
+  const ssl = currentStatus.upstream_ssl;
+  if (host) {
+    curEl.textContent = `${t('currentUpstream')} ${upstreamLabel(host, port, ssl)}`;
   }
 }
 
@@ -1348,7 +1377,7 @@ async function connectToUpstream(host, port, ssl) {
     return;
   }
 
-  curEl.textContent = `${t('currentUpstream')} ${host}:${port}${ssl ? ' (SSL)' : ''}`;
+  curEl.textContent = `${t('currentUpstream')} ${upstreamLabel(host, port, ssl)}`;
   curEl.style.color = 'var(--green)';
   setTimeout(() => { curEl.style.color = 'var(--text-muted)'; }, 2000);
 
@@ -1388,7 +1417,7 @@ async function connectManual() {
 
   // Update current upstream display
   const curEl = document.getElementById('current-upstream');
-  curEl.textContent = `${t('currentUpstream')} ${host}:${port}${ssl ? ' (SSL)' : ''}`;
+  curEl.textContent = `${t('currentUpstream')} ${upstreamLabel(host, port, ssl)}`;
 
   // Keep details open so the user sees the success
 }
