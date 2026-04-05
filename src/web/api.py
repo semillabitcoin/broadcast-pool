@@ -46,7 +46,8 @@ async def auth_middleware(request, handler):
     """Require Bearer token for API endpoints. Static/root are public (served by app_proxy)."""
     if AUTH_TOKEN and request.path.startswith("/api/"):
         token = request.headers.get("Authorization", "").removeprefix("Bearer ").strip()
-        if token != AUTH_TOKEN:
+        import hmac
+        if not hmac.compare_digest(token.encode(), AUTH_TOKEN.encode()):
             return web.json_response({"error": "Unauthorized"}, status=401)
     return await handler(request)
 
@@ -874,6 +875,11 @@ async def handle_set_preferences(request: web.Request) -> web.Response:
 
     if "price_source" in body:
         source = body["price_source"].strip()
+        if source and source != "coingecko":
+            from urllib.parse import urlparse
+            parsed_url = urlparse(source)
+            if parsed_url.scheme not in ("http", "https"):
+                return web.json_response({"error": "Only http/https URLs allowed"}, status=400)
         store.set_state("price_source", source)
         if not source:
             store.set_state("current_price", "")
@@ -889,7 +895,12 @@ async def handle_schedule_price(request: web.Request) -> web.Response:
 
     price = body.get("target_price")
     direction = body.get("direction", "below")
-    expires_at = body.get("expires_at")  # ISO format: "2026-04-10T18:00"
+    expires_at = body.get("expires_at")
+    if expires_at:
+        try:
+            datetime.fromisoformat(str(expires_at).replace("Z", "+00:00"))
+        except (ValueError, TypeError):
+            return web.json_response({"error": "expires_at must be ISO format"}, status=400)
 
     if not price or not isinstance(price, (int, float)) or price <= 0:
         return web.json_response({"error": "target_price (positive number) required"}, status=400)

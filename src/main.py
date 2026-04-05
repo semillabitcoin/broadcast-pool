@@ -38,6 +38,8 @@ async def main():
     conn = init_db(config.DB_PATH)
     store = TxStore(conn)
     log.info("Database initialized at %s", config.DB_PATH)
+    if not config.APP_SEED:
+        log.warning("APP_SEED not set — transaction encryption DISABLED")
 
     # Create components
     proxy = ProxyServer(store)

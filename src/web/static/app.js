@@ -1625,7 +1625,9 @@ function updatePriceCurrentLabel(source) {
   } else if (source === 'coingecko') {
     el.textContent = `${t('currentUpstream')} CoinGecko API`;
   } else {
-    el.textContent = `${t('currentUpstream')} ${source}`;
+    // Try to match a discovered oracle for friendly name
+    const name = source.includes('3200') ? 'El Or\u00e1culo (local)' : source;
+    el.textContent = `${t('currentUpstream')} ${name}`;
   }
 }
 
@@ -1637,13 +1639,8 @@ async function discoverPriceOracle() {
     const data = await fetchJSON('/api/discover-price-oracle');
     const oracles = data.oracles || [];
 
-    // Always show CoinGecko as an option
-    let cards = `<button class="server-card" onclick="connectPriceSource('coingecko')">
-      <span class="server-dot">\u{1F7E2}</span>
-      <span class="server-name">CoinGecko API</span>
-      <span class="server-net" style="color:var(--text-muted)">externa</span>
-    </button>`;
-
+    // Local oracles first, then CoinGecko
+    let cards = '';
     for (const o of oracles) {
       const priceStr = o.price_usd ? '$' + Math.round(o.price_usd).toLocaleString() : '';
       cards += `<button class="server-card" onclick="connectPriceSource('${o.url}')" title="${o.url}">
@@ -1653,6 +1650,11 @@ async function discoverPriceOracle() {
         <span class="server-net" style="color:var(--text-muted)">local</span>
       </button>`;
     }
+    cards += `<button class="server-card" onclick="connectPriceSource('coingecko')">
+      <span class="server-dot">\u{1F7E2}</span>
+      <span class="server-name">CoinGecko API</span>
+      <span class="server-net" style="color:var(--text-muted)">externa</span>
+    </button>`;
 
     container.innerHTML = `<div style="display:flex;gap:8px;flex-wrap:wrap">${cards}</div>`;
   } catch {

@@ -2,7 +2,9 @@ __pycache__/
 *.pyc
 .venv/
 *.db
-data/pool.db
+*.db-shm
+*.db-wal
+data/
 .DS_Store
 *.mov
 *.mp4
