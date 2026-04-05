@@ -68,6 +68,15 @@ class Scheduler:
             return {"error": "Transaction not found"}
         if tx.status == "expired":
             return {"error": "Transaction expired — cannot broadcast"}
+        # Check expiry even if status hasn't been updated yet
+        if tx.expires_at:
+            from datetime import datetime as dt
+            try:
+                if dt.utcnow().strftime("%Y-%m-%dT%H:%M") >= tx.expires_at:
+                    self.store.update_status(tx.txid, "expired")
+                    return {"error": "Transaction expired — cannot broadcast"}
+            except Exception:
+                pass
         if tx.status not in ("pending", "scheduled"):
             return {"error": f"Cannot broadcast tx in status '{tx.status}'"}
 
