@@ -390,8 +390,33 @@ button:disabled { opacity: 0.4; cursor: not-allowed; }
 
 /* Responsive */
 @media (max-width: 768px) {
-  body { padding: 16px; }
-  .status-bar { gap: 16px; }
-  .tx-table { font-size: 13px; }
-  .tx-table th, .tx-table td { padding: 8px; }
+  body { padding: 12px; }
+  h1 { font-size: 20px; }
+  .subtitle { font-size: 12px; }
+  .status-bar { gap: 12px; padding: 12px 14px; }
+  .status-value { font-size: 16px; }
+  .status-label { font-size: 10px; }
+  .actions-bar { font-size: 12px; gap: 8px; }
+  .actions-bar input[type="number"] { width: 80px; font-size: 13px; padding: 4px 8px; }
+
+  /* Horizontal scroll for tables */
+  #tx-container, #confirmed-section, #vault-content {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+  .tx-table { font-size: 12px; table-layout: auto; min-width: 700px; }
+  .tx-table th, .tx-table td { padding: 6px 8px; white-space: nowrap; }
+  .tx-table .col-txid { width: auto; }
+  .tx-table .col-type { width: auto; }
+  .tx-table .col-wallet { width: auto; }
+  .tx-table .col-amount { width: auto; }
+  .tx-table .col-feerate { width: auto; }
+  .tx-table .col-age { width: auto; }
+  .tx-table .col-status { width: auto; }
+  .tx-table .col-target { width: auto; }
+  .tx-table .col-actions { width: auto; }
+
+  /* Settings sections */
+  .settings-row { flex-wrap: wrap; gap: 8px; }
+  .server-card { padding: 6px 10px; }
 }

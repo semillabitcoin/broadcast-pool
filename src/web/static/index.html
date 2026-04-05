@@ -56,12 +56,6 @@
         <span class="status-label" id="lbl-connections">Conexiones</span>
         <span class="status-value" id="s-connections">0</span>
       </div>
-      <div class="status-item" style="margin-left:auto">
-        <span class="status-label" id="lbl-upstream">Upstream</span>
-        <span class="status-value" style="font-size:14px">
-          <span id="s-upstream">--</span>
-        </span>
-      </div>
     </div>
 
     <div class="actions-bar">
@@ -102,24 +96,23 @@
         <h2 id="empty-title">Sin transacciones</h2>
         <p id="empty-desc">Conecta Sparrow o Liana a umbrel.local:50005 y envia una transaccion</p>
       </div>
+      <table class="tx-table" id="tx-table" style="display:none">
+        <thead>
+          <tr>
+            <th class="sortable col-txid" onclick="sortBy('created_at')" id="th-txid">TxID <span class="sort-arrow" id="sort-created_at"></span></th>
+            <th class="sortable col-type" onclick="sortBy('tx_tags')" id="th-type">Tipo <span class="sort-arrow" id="sort-tx_tags"></span></th>
+            <th class="sortable col-wallet" onclick="sortBy('wallet_label')" id="th-wallet">Wallet <span class="sort-arrow" id="sort-wallet_label"></span></th>
+            <th class="sortable col-amount" onclick="sortBy('amount_sats')" id="th-amount">Monto <span class="sort-arrow" id="sort-amount_sats"></span></th>
+            <th class="sortable col-feerate" onclick="sortBy('fee_rate')" id="th-feerate">Fee rate <span class="sort-arrow" id="sort-fee_rate"></span></th>
+            <th class="sortable col-age" onclick="sortBy('oldest_coin_age')" id="th-coinage">Edad moneda <span class="sort-arrow" id="sort-oldest_coin_age"></span></th>
+            <th class="sortable col-status" onclick="sortBy('status')" id="th-status">Estado <span class="sort-arrow" id="sort-status"></span></th>
+            <th class="sortable col-target" onclick="sortBy('target_block')" id="th-target" title="">Retransmitir en <span class="sort-arrow" id="sort-target_block"></span></th>
+            <th class="col-actions" id="th-actions" style="text-align:center">Acciones</th>
+          </tr>
+        </thead>
+        <tbody id="tx-body"></tbody>
+      </table>
     </div>
-
-    <table class="tx-table" id="tx-table" style="display:none">
-      <thead>
-        <tr>
-          <th class="sortable col-txid" onclick="sortBy('created_at')" id="th-txid">TxID <span class="sort-arrow" id="sort-created_at"></span></th>
-          <th class="sortable col-type" onclick="sortBy('tx_tags')" id="th-type">Tipo <span class="sort-arrow" id="sort-tx_tags"></span></th>
-          <th class="sortable col-wallet" onclick="sortBy('wallet_label')" id="th-wallet">Wallet <span class="sort-arrow" id="sort-wallet_label"></span></th>
-          <th class="sortable col-amount" onclick="sortBy('amount_sats')" id="th-amount">Monto <span class="sort-arrow" id="sort-amount_sats"></span></th>
-          <th class="sortable col-feerate" onclick="sortBy('fee_rate')" id="th-feerate">Fee rate <span class="sort-arrow" id="sort-fee_rate"></span></th>
-          <th class="sortable col-age" onclick="sortBy('oldest_coin_age')" id="th-coinage">Edad moneda <span class="sort-arrow" id="sort-oldest_coin_age"></span></th>
-          <th class="sortable col-status" onclick="sortBy('status')" id="th-status">Estado <span class="sort-arrow" id="sort-status"></span></th>
-          <th class="sortable col-target" onclick="sortBy('target_block')" id="th-target" title="">Retransmitir en <span class="sort-arrow" id="sort-target_block"></span></th>
-          <th class="col-actions" id="th-actions" style="text-align:center">Acciones</th>
-        </tr>
-      </thead>
-      <tbody id="tx-body"></tbody>
-    </table>
 
     <div id="confirmed-section" style="display:none; margin-top:32px;">
       <div style="display:flex; align-items:center; margin-bottom:12px;">

@@ -164,7 +164,6 @@ function applyLang() {
   document.getElementById('lbl-retained').textContent = t('retained');
   document.getElementById('lbl-scheduled').textContent = t('scheduled');
   document.getElementById('lbl-connections').textContent = t('connections');
-  document.getElementById('lbl-upstream').textContent = t('upstream');
   document.getElementById('btn-import').textContent = t('importTx');
 
   // Settings tab
@@ -276,7 +275,6 @@ function updateStatus(s) {
   } else {
     netEl.style.color = 'var(--text)';
   }
-  document.getElementById('s-upstream').textContent = s.upstream_host + ':' + s.upstream_port + (s.upstream_ssl ? ' (SSL)' : '');
 
   if (s.current_mtp) {
     const mtpDate = new Date(s.current_mtp * 1000);
