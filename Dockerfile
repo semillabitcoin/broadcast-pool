@@ -12,9 +12,7 @@ COPY --from=builder /install /usr/local
 
 COPY src/ src/
 
-RUN mkdir -p /data && chown 1000:1000 /data
-
-USER 1000:1000
+RUN mkdir -p /data
 
 EXPOSE 50005 4040
 
