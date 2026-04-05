@@ -165,7 +165,6 @@
     <div class="settings-section">
       <h3 class="settings-title" id="set-title-upstream">1. Conecta Broadcast Pool a un servidor Electrum</h3>
       <p class="settings-help" id="set-upstream-desc"></p>
-      <div id="current-upstream" style="font-size:13px;color:var(--text-muted);margin-bottom:12px;"></div>
       <div id="discovered-servers" style="margin-bottom:12px;"></div>
       <details id="manual-conn" class="manual-connection">
         <summary id="manual-conn-summary" style="cursor:pointer;font-size:13px;color:var(--text-muted);margin-bottom:12px;">Conexión manual</summary>
@@ -188,6 +187,7 @@
           </div>
         </div>
       </details>
+      <div id="current-upstream" class="connected-label" style="margin-top:12px;"></div>
     </div>
 
     <!-- 2. How to accumulate transactions -->
@@ -227,7 +227,6 @@
             <span id="set-lbl-price-enabled">Activar retransmisión por precio</span>
           </label>
           <div id="price-source-config" style="display:none">
-            <div id="price-current-source" style="font-size:13px;color:var(--text-muted);margin-bottom:12px;"></div>
             <div id="price-discovered" style="margin-bottom:12px;"></div>
             <details class="manual-connection">
               <summary id="price-manual-summary" style="cursor:pointer;font-size:13px;color:var(--text-muted);margin-bottom:12px;">URL manual</summary>
@@ -239,6 +238,7 @@
                 </div>
               </div>
             </details>
+            <div id="price-current-source" class="connected-label" style="margin-top:12px;"></div>
           </div>
         </div>
       </div>

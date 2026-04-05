@@ -192,8 +192,13 @@ class Scheduler:
 
                 price = await self._fetch_price(source)
                 if price and price > 0:
-                    self._current_price = price
-                    self.store.set_state("current_price", str(price))
+                    if self._current_price and abs(price - self._current_price) / self._current_price > 0.15:
+                        log.warning("Price spike rejected: $%.0f -> $%.0f (%.1f%%)",
+                                    self._current_price, price,
+                                    abs(price - self._current_price) / self._current_price * 100)
+                    else:
+                        self._current_price = price
+                        self.store.set_state("current_price", str(price))
             except asyncio.CancelledError:
                 break
             except Exception as e:
