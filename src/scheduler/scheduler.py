@@ -32,6 +32,8 @@ class Scheduler:
 
     async def start(self) -> None:
         self._running = True
+        # Price poller runs independently of upstream connection
+        self._price_task = asyncio.create_task(self._price_poller())
         backoff = 1
         while self._running:
             try:
@@ -113,11 +115,6 @@ class Scheduler:
         # Set up notification handler for new blocks
         self._upstream.set_notification_callback(self._handle_notification)
 
-        # Start price poller if configured
-        if self._price_task:
-            self._price_task.cancel()
-        self._price_task = asyncio.create_task(self._price_poller())
-
         # Keep alive — break immediately on reconnect request
         self._reconnect_event.clear()
         while self._running:
@@ -171,6 +168,9 @@ class Scheduler:
 
         # Check price-triggered txs
         await self._check_price_triggers()
+
+        # Purge expired price-scheduled txs
+        self._purge_expired_txs()
 
         # Resolve unresolved inputs (retry for txs missing confirmed_height)
         await self._resolve_pending_inputs()
@@ -246,6 +246,22 @@ class Scheduler:
                 result = await self._do_broadcast(tx)
                 if "error" not in result:
                     log.info("Price-triggered broadcast of %s", tx.txid[:16])
+
+    def _purge_expired_txs(self) -> None:
+        """Delete price-scheduled txs whose expiry has passed."""
+        now = datetime.utcnow().strftime("%Y-%m-%dT%H:%M")
+        with self.store._lock:
+            rows = self.store._conn.execute(
+                """SELECT txid FROM retained_txs
+                   WHERE status = 'scheduled' AND expires_at IS NOT NULL AND expires_at <= ?
+                   AND network = ?""",
+                (now, self.store.network),
+            ).fetchall()
+            for r in rows:
+                self.store._conn.execute("DELETE FROM retained_txs WHERE txid = ?", (r["txid"],))
+                log.info("Expired tx %s purged (past expiry %s)", r["txid"][:16], now)
+            if rows:
+                self.store._conn.commit()
 
     async def _do_broadcast(self, tx, _depth=0) -> dict:
         """Broadcast a single transaction to upstream. Respects dependency order."""

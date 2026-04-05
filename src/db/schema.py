@@ -87,6 +87,7 @@ MIGRATIONS = [
     "ALTER TABLE retained_txs ADD COLUMN wallet_label TEXT NOT NULL DEFAULT ''",
     "ALTER TABLE retained_txs ADD COLUMN target_price REAL",
     "ALTER TABLE retained_txs ADD COLUMN price_direction TEXT DEFAULT 'below'",
+    "ALTER TABLE retained_txs ADD COLUMN expires_at TEXT",
     "ALTER TABLE retained_tx_inputs ADD COLUMN confirmed_height INTEGER",
     """CREATE TABLE IF NOT EXISTS vault_entries (
         id INTEGER PRIMARY KEY AUTOINCREMENT,

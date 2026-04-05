@@ -68,10 +68,12 @@ const i18n = {
     connectLan: 'Red local',
     copied: 'copiado',
     autoLocktime: 'Auto agendar transacciones con locktime futuro',
+    subLocktime: 'Locktimes', subPrice: 'Precio',
     priceDesc: 'Retransmitir transacciones autom\u00e1ticamente cuando el precio de Bitcoin cruce un umbral. Pensado para enviar colateral adicional a contratos de pr\u00e9stamo y evitar liquidaciones:',
     priceEnabled: 'Activar retransmisi\u00f3n por precio',
     priceSource: 'Fuente', priceNone: 'Seleccionar...', priceCustom: 'Or\u00e1culo local',
     priceSchedule: 'Retransmitir si BTC', priceBelow: 'cae por debajo de', priceAbove: 'sube por encima de',
+    priceExpiry: 'Caduca', priceExpired: 'expirada',
     vaultNoNpub: 'Configura tu npub', vaultNoNpubDesc: 'Ve a Ajustes y pega tu npub para activar la b\u00f3veda cifrada',
     vaultNoExt: 'Extensi\u00f3n NIP-07 requerida', vaultNoExtDesc: 'Instala Alby o nos2x para descifrar la b\u00f3veda',
     vaultDecrypting: 'Descifrando...', vaultDecrypted: 'entradas descifradas',
@@ -80,7 +82,7 @@ const i18n = {
     hexCopied: 'hex copiado', txidCopied: 'txid copiado',
     copyHex: 'Copiar tx hex', copyTxid: 'Copiar txid',
     mtpLag: 'MTP lag', mtpPassed: 'MTP ya paso esta fecha',
-    mtpTip: 'Median Time Past: la mediana de los timestamps de los \u00faltimos 11 bloques. Es el reloj que usa Bitcoin para evaluar nLocktimes en base a tiempo.',
+    mtpTip: 'Median Time Past: mediana de los timestamps de los \u00faltimos 11 bloques. El reloj que usa Bitcoin para evaluar nLocktimes en base a tiempo.',
     mtpWill: 'MTP la alcanzara en',
   },
   en: {
@@ -141,10 +143,12 @@ const i18n = {
     connectLan: 'Local network',
     copied: 'copied',
     autoLocktime: 'Auto-schedule transactions with future locktime',
+    subLocktime: 'Locktimes', subPrice: 'Price',
     priceDesc: 'Automatically broadcast transactions when the Bitcoin price crosses a threshold. Designed to send additional collateral to loan contracts and avoid liquidations:',
     priceEnabled: 'Enable price-based broadcast',
     priceSource: 'Source', priceNone: 'Select...', priceCustom: 'Local oracle',
     priceSchedule: 'Broadcast if BTC', priceBelow: 'drops below', priceAbove: 'rises above',
+    priceExpiry: 'Expires', priceExpired: 'expired',
     vaultNoNpub: 'Set up your npub', vaultNoNpubDesc: 'Go to Settings and paste your npub to enable the encrypted vault',
     vaultNoExt: 'NIP-07 extension required', vaultNoExtDesc: 'Install Alby or nos2x to decrypt the vault',
     vaultDecrypting: 'Decrypting...', vaultDecrypted: 'entries decrypted',
@@ -153,7 +157,7 @@ const i18n = {
     hexCopied: 'hex copied', txidCopied: 'txid copied',
     copyHex: 'Copy tx hex', copyTxid: 'Copy txid',
     mtpLag: 'MTP lag', mtpPassed: 'MTP already passed this date',
-    mtpTip: 'Median Time Past: the median of the last 11 block timestamps. The clock Bitcoin uses to evaluate time-based nLocktimes.',
+    mtpTip: 'Median Time Past: median of the last 11 block timestamps. The clock Bitcoin uses to evaluate time-based nLocktimes.',
     mtpWill: 'MTP will reach it in',
   },
 };
@@ -180,7 +184,7 @@ function applyLang() {
 
   document.getElementById('lbl-net').textContent = t('net');
   document.getElementById('lbl-height').textContent = t('height');
-  document.getElementById('lbl-mtp').innerHTML = t('mtp') + ' <span class="help-tip" id="mtp-tip" title="' + t('mtpTip').replace(/"/g, '&quot;') + '">?</span>';
+  document.getElementById('lbl-mtp').innerHTML = t('mtp') + ' <span class="help-tip" onclick="toggleTooltip(event,\'mtp-detail\')">?<span class="lock-detail" id="mtp-detail">' + t('mtpTip') + '</span></span>';
   document.getElementById('lbl-retained').textContent = t('retained');
   document.getElementById('lbl-scheduled').textContent = t('scheduled');
   document.getElementById('lbl-connections').textContent = t('connections');
@@ -200,13 +204,13 @@ function applyLang() {
   document.getElementById('set-lbl-lang').textContent = t('setLang');
   document.getElementById('set-lbl-unit').textContent = t('setUnit');
   document.getElementById('set-title-behavior').textContent = t('setBehavior');
+  document.getElementById('set-sub-locktime').textContent = t('subLocktime');
   document.getElementById('set-behavior-desc').textContent = t('setBehaviorDesc');
   document.getElementById('set-lbl-auto-locktime').textContent = t('autoLocktime');
+  document.getElementById('set-sub-price').textContent = t('subPrice');
   document.getElementById('set-price-desc').textContent = t('priceDesc');
   document.getElementById('set-lbl-price-enabled').textContent = t('priceEnabled');
-  document.getElementById('set-lbl-price-source').textContent = t('priceSource');
-  document.getElementById('opt-price-none').textContent = t('priceNone');
-  document.getElementById('opt-price-custom').textContent = t('priceCustom');
+  document.getElementById('price-manual-summary').textContent = lang === 'es' ? 'URL manual' : 'Manual URL';
   document.getElementById('manual-conn-summary').textContent = t('manualConn');
   const saveNpubBtn = document.getElementById('btn-save-npub');
   if (saveNpubBtn && saveNpubBtn.style.display !== 'none') saveNpubBtn.textContent = t('saveNpub');
@@ -269,7 +273,8 @@ async function refresh() {
 
   const active = document.activeElement;
   const hasDatePicker = document.querySelector('[id^="datepicker-"]');
-  const isEditing = hasDatePicker || (active && (active.classList.contains('target-input') || active.tagName === 'TEXTAREA'));
+  const hasPricePicker = document.querySelector('[id^="pricepicker-"]');
+  const isEditing = hasDatePicker || hasPricePicker || (active && (active.classList.contains('target-input') || active.tagName === 'TEXTAREA'));
 
   try {
     const [txData, statusData] = await Promise.all([
@@ -312,8 +317,6 @@ function updateStatus(s) {
     const mtpTip = lang === 'es'
       ? `Median Time Past: mediana de los timestamps de los ultimos 11 bloques.\nEs el reloj de Bitcoin para timelocks.\nLag actual: ${lagMin} min respecto al reloj del sistema.\nUnix: ${s.current_mtp}`
       : `Median Time Past: median of last 11 block timestamps.\nBitcoin's clock for timelocks.\nCurrent lag: ${lagMin} min vs system clock.\nUnix: ${s.current_mtp}`;
-    document.getElementById('s-mtp').title = mtpTip;
-    document.getElementById('lbl-mtp').title = mtpTip;
   } else {
     document.getElementById('s-mtp').textContent = '--';
   }
@@ -323,11 +326,11 @@ function updateStatus(s) {
     aaBase.value = s.current_height + 6;
   }
 
-  // Price display
-  const priceEl = document.getElementById('status-price');
+  // Price display (next to tabs)
+  const priceEl = document.getElementById('price-display');
   if (s.current_price && s.price_source) {
     priceEl.style.display = '';
-    document.getElementById('s-price').textContent = '$' + Math.round(s.current_price).toLocaleString();
+    priceEl.textContent = '$' + Math.round(s.current_price).toLocaleString();
   } else {
     priceEl.style.display = 'none';
   }
@@ -490,19 +493,29 @@ function renderActiveRow(tx, height) {
 
   let targetCell;
   if (isPriceScheduled) {
-    // Price scheduled: show price threshold + pencil
+    // Price scheduled: show price threshold + expiry + pencil
     const dir = tx.price_direction === 'above' ? '↑' : '↓';
-    const dirLabel = tx.price_direction === 'above'
-      ? (lang === 'es' ? 'sube de' : 'above')
-      : (lang === 'es' ? 'baja de' : 'below');
+    let expiryTag = '';
+    if (tx.expires_at) {
+      const expDate = new Date(tx.expires_at);
+      const remaining = Math.round((expDate - Date.now()) / 3600000);
+      if (remaining <= 0) {
+        expiryTag = `<span class="target-rem" style="color:var(--red)">(${t('priceExpired')})</span>`;
+      } else if (remaining < 24) {
+        expiryTag = `<span class="target-rem">(${remaining}h)</span>`;
+      } else {
+        expiryTag = `<span class="target-rem">(${Math.round(remaining/24)}d)</span>`;
+      }
+    }
     targetCell = `<div class="target-cell">
-      <span style="font-size:12px;color:var(--mainnet)">${dir} $${Math.round(tx.target_price).toLocaleString()}</span>
+      <span class="mono">${dir} $${Math.round(tx.target_price).toLocaleString()}</span>
+      ${expiryTag}
       <span class="target-edit" onclick="unschedule('${tx.txid_full}')" title="${lang==='es'?'Modificar':'Edit'}">&#9998;</span>
     </div>`;
   } else if (isMtpScheduled) {
     // MTP scheduled: show date + pencil to edit
     targetCell = `<div class="target-cell">
-      <span style="font-size:12px;color:var(--green)">MTP: ${tx.locktime.date}</span>
+      <span style="font-size:12px">MTP: ${tx.locktime.date}</span>
       <span class="target-edit" onclick="unschedule('${tx.txid_full}')" title="${lang==='es'?'Modificar':'Edit'}">&#9998;</span>
     </div>`;
   } else if (isBlockScheduled) {
@@ -594,6 +607,40 @@ async function copyTx(txid, status) {
   }
 }
 
+function toggleTooltip(event, id) {
+  event.stopPropagation();
+  const existing = document.getElementById('bp-tooltip');
+  if (existing && existing.dataset.source === id) {
+    existing.remove();
+    return;
+  }
+  if (existing) existing.remove();
+
+  const source = document.getElementById(id);
+  if (!source) return;
+
+  const rect = event.currentTarget.getBoundingClientRect();
+  const tip = document.createElement('div');
+  tip.id = 'bp-tooltip';
+  tip.className = 'bp-tooltip';
+  tip.dataset.source = id;
+  tip.textContent = source.textContent;
+  document.body.appendChild(tip);
+
+  const tipW = tip.offsetWidth;
+  let left = rect.left + rect.width / 2 - tipW / 2;
+  left = Math.max(8, Math.min(left, window.innerWidth - tipW - 8));
+  tip.style.left = left + 'px';
+  tip.style.top = (rect.bottom + 6) + 'px';
+}
+
+document.addEventListener('click', (e) => {
+  if (!e.target.closest('.lock-icon') && !e.target.closest('.help-tip') && !e.target.closest('.bp-tooltip')) {
+    const tip = document.getElementById('bp-tooltip');
+    if (tip) tip.remove();
+  }
+});
+
 function escapeHTML(str) {
   if (!str) return '';
   return str.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
@@ -684,14 +731,17 @@ function locktimeLock(tx) {
   if (lt.type === 'block' && height && height >= lt.value) return '';
 
   const id = 'lock-' + tx.txid_full;
+  const autoMsg = tx.status === 'scheduled'
+    ? (lang === 'es' ? ' — auto programada por nLockTime' : ' — auto-scheduled by nLockTime')
+    : '';
   let detail;
   if (lt.type === 'timestamp') {
-    detail = `MTP: ${lt.date}`;
+    detail = `nLockTime MTP: ${lt.date}${autoMsg}`;
   } else {
-    detail = `${lang === 'es' ? 'Bloque' : 'Block'}: ${lt.value.toLocaleString()}`;
+    detail = `nLockTime ${lang === 'es' ? 'bloque' : 'block'}: ${lt.value.toLocaleString()}${autoMsg}`;
   }
 
-  return ` <span class="lock-icon" onclick="document.getElementById('${id}').classList.toggle('open')">&#128274;<span class="lock-detail" id="${id}">${detail}</span></span>`;
+  return ` <span class="lock-icon" onclick="toggleTooltip(event,'${id}')">&#128274;<span class="lock-detail" id="${id}">${detail}</span></span>`;
 }
 
 function dependencyTag(tx) {
@@ -810,7 +860,12 @@ async function broadcastNow(txid) {
 async function deleteTx(txid) {
   if (!confirm(t('deleteConfirm'))) return;
   await fetchJSON(`/api/txs/${txid}`, { method: 'DELETE' });
-  refresh();
+  // Force immediate re-render (bypass isEditing check)
+  const [txData, statusData] = await Promise.all([fetchJSON('/api/txs'), fetchJSON('/api/status')]);
+  currentData = txData;
+  currentStatus = statusData;
+  updateStatus(statusData);
+  renderTable(txData.txs, txData.current_height);
 }
 
 async function unschedule(txid) {
@@ -916,6 +971,9 @@ async function importTx() {
 function showDatePicker(txid) {
   const existing = document.getElementById('datepicker-' + txid);
   if (existing) { existing.remove(); return; }
+  // Close price picker if open
+  const pricePicker = document.getElementById('pricepicker-' + txid);
+  if (pricePicker) pricePicker.remove();
 
   // Find the tx data to check for locktime
   const tx = currentData.txs.find(t => t.txid_full === txid);
@@ -1219,17 +1277,8 @@ async function loadSettingsTab() {
   const priceEnabled = !!s.price_source;
   document.getElementById('set-price-enabled').checked = priceEnabled;
   document.getElementById('price-source-config').style.display = priceEnabled ? 'block' : 'none';
-  if (s.price_source === 'coingecko') {
-    document.getElementById('set-price-source').value = 'coingecko';
-    document.getElementById('price-custom-url').style.display = 'none';
-  } else if (s.price_source) {
-    document.getElementById('set-price-source').value = 'custom';
-    document.getElementById('set-price-url').value = s.price_source;
-    document.getElementById('price-custom-url').style.display = 'block';
-  } else {
-    document.getElementById('set-price-source').value = '';
-    document.getElementById('price-custom-url').style.display = 'none';
-  }
+  updatePriceCurrentLabel(s.price_source);
+  if (priceEnabled) discoverPriceOracle();
 
   // Connection info (uses status endpoint for proxy_port + hidden_service)
   loadConnectInfo(currentStatus);
@@ -1554,35 +1603,83 @@ function savePrefAutoLocktime(checked) {
 function togglePriceSource(enabled) {
   document.getElementById('price-source-config').style.display = enabled ? 'block' : 'none';
   if (!enabled) {
-    document.getElementById('set-price-source').value = '';
-    savePriceSource('');
+    connectPriceSource('');
+  } else {
+    discoverPriceOracle();
   }
 }
 
-function savePriceSource(val) {
-  let source = val;
-  if (val === 'custom') {
-    const url = document.getElementById('set-price-url').value.trim();
-    source = url || '';
-    document.getElementById('price-custom-url').style.display = 'block';
-  } else {
-    document.getElementById('price-custom-url').style.display = 'none';
-  }
-
+function connectPriceSource(source) {
   fetchJSON('/api/preferences', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ price_source: source }),
   });
+  updatePriceCurrentLabel(source);
+}
+
+function updatePriceCurrentLabel(source) {
+  const el = document.getElementById('price-current-source');
+  if (!source) {
+    el.textContent = '';
+  } else if (source === 'coingecko') {
+    el.textContent = `${t('currentUpstream')} CoinGecko API`;
+  } else {
+    el.textContent = `${t('currentUpstream')} ${source}`;
+  }
+}
+
+async function discoverPriceOracle() {
+  const container = document.getElementById('price-discovered');
+  container.innerHTML = `<span style="font-size:12px;color:var(--text-muted)">${t('searchingServers').replace('Electrum', 'precio')}</span>`;
+
+  try {
+    const data = await fetchJSON('/api/discover-price-oracle');
+    const oracles = data.oracles || [];
+
+    // Always show CoinGecko as an option
+    let cards = `<button class="server-card" onclick="connectPriceSource('coingecko')">
+      <span class="server-dot">\u{1F7E2}</span>
+      <span class="server-name">CoinGecko API</span>
+      <span class="server-net" style="color:var(--text-muted)">externa</span>
+    </button>`;
+
+    for (const o of oracles) {
+      const priceStr = o.price_usd ? '$' + Math.round(o.price_usd).toLocaleString() : '';
+      cards += `<button class="server-card" onclick="connectPriceSource('${o.url}')" title="${o.url}">
+        <span class="server-dot">\u{1F7E2}</span>
+        <span class="server-name">${o.name}</span>
+        <span class="server-net" style="color:var(--mainnet)">${priceStr}</span>
+        <span class="server-net" style="color:var(--text-muted)">local</span>
+      </button>`;
+    }
+
+    container.innerHTML = `<div style="display:flex;gap:8px;flex-wrap:wrap">${cards}</div>`;
+  } catch {
+    container.innerHTML = '';
+  }
+}
+
+function connectPriceUrl() {
+  const url = document.getElementById('set-price-url').value.trim();
+  if (!url) return;
+  connectPriceSource(url);
 }
 
 function showPricePicker(txid) {
   const existing = document.getElementById('pricepicker-' + txid);
   if (existing) { existing.remove(); return; }
+  // Close date picker if open
+  const datePicker = document.getElementById('datepicker-' + txid);
+  if (datePicker) datePicker.remove();
 
   const row = document.getElementById('blk-' + txid).closest('tr');
   const picker = document.createElement('tr');
   picker.id = 'pricepicker-' + txid;
+  // Default expiry: 7 days from now
+  const defaultExpiry = new Date(Date.now() + 7 * 86400000);
+  const expiryStr = defaultExpiry.toISOString().slice(0, 16);
+
   picker.innerHTML = `<td colspan="9" style="background:var(--bg-card);padding:12px;border-bottom:1px solid var(--border)">
     <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap;justify-content:flex-end">
       <label style="font-size:13px;color:var(--text-muted)">${t('priceSchedule')}</label>
@@ -1590,8 +1687,11 @@ function showPricePicker(txid) {
         <option value="below">${t('priceBelow')}</option>
         <option value="above">${t('priceAbove')}</option>
       </select>
-      <span style="color:var(--mainnet);font-weight:600">$</span>
+      <span style="color:var(--text-muted);font-weight:600">$</span>
       <input type="number" id="price-val-${txid}" class="inline-edit" style="width:120px" placeholder="50000">
+      <span style="border-left:1px solid var(--border);height:20px"></span>
+      <label style="font-size:13px;color:var(--text-muted)">${t('priceExpiry')}:</label>
+      <input type="datetime-local" id="price-exp-${txid}" class="inline-edit" style="width:200px" value="${expiryStr}">
       <button class="small" onclick="scheduleByPrice('${txid}')">OK</button>
       <button class="small secondary" onclick="document.getElementById('pricepicker-${txid}').remove()">${t('close')}</button>
     </div>
@@ -1602,12 +1702,16 @@ function showPricePicker(txid) {
 async function scheduleByPrice(txid) {
   const price = parseFloat(document.getElementById('price-val-' + txid).value);
   const dir = document.getElementById('price-dir-' + txid).value;
+  const expiryInput = document.getElementById('price-exp-' + txid).value;
   if (!price || price <= 0) return;
+
+  const body = { target_price: price, direction: dir };
+  if (expiryInput) body.expires_at = expiryInput;
 
   await fetchJSON('/api/txs/' + txid + '/schedule-price', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ target_price: price, direction: dir }),
+    body: JSON.stringify(body),
   });
 
   const picker = document.getElementById('pricepicker-' + txid);

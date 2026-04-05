@@ -86,6 +86,7 @@ def create_app(store: TxStore, proxy_server=None, scheduler=None) -> web.Applica
     app.router.add_post("/api/preferences", handle_set_preferences)
     app.router.add_post("/api/txs/{txid}/schedule-price", handle_schedule_price)
     app.router.add_get("/api/price", handle_get_price)
+    app.router.add_get("/api/discover-price-oracle", handle_discover_price_oracle)
     app.router.add_get("/api/vault", handle_vault)
     app.router.add_post("/api/vault/clear", handle_vault_clear)
     app.router.add_get("/api/conflicts", handle_conflicts)
@@ -179,6 +180,7 @@ def _tx_to_dict(tx, current_height: int = 0, store: TxStore = None) -> dict:
         "target_block": tx.target_block,
         "target_price": tx.target_price,
         "price_direction": tx.price_direction,
+        "expires_at": tx.expires_at,
         "blocks_remaining": blocks_remaining,
         "oldest_coin_age": oldest_coin_age,
         "sort_order": tx.sort_order,
@@ -307,7 +309,7 @@ async def handle_unschedule(request: web.Request) -> web.Response:
 
     with store._lock:
         store._conn.execute(
-            "UPDATE retained_txs SET status='pending', target_block=NULL, target_price=NULL, price_direction=NULL, updated_at=datetime('now') WHERE txid=?",
+            "UPDATE retained_txs SET status='pending', target_block=NULL, target_price=NULL, price_direction=NULL, expires_at=NULL, updated_at=datetime('now') WHERE txid=?",
             (txid,),
         )
         store._conn.commit()
@@ -461,6 +463,18 @@ async def handle_import_tx(request: web.Request) -> web.Response:
                         break
             except Exception:
                 pass
+
+    # Auto-schedule if locktime is in the future
+    auto_lock = store.get_state("auto_schedule_locktime") != "false"
+    if auto_lock:
+        current_height = store.get_current_height()
+        if parsed.locktime >= 500_000_000:
+            # Timestamp locktime — mark as scheduled for MTP
+            store.update_status(parsed.txid, "scheduled")
+        elif (0 < parsed.locktime < 500_000_000
+                and parsed.locktime > max(current_height, 1) + 1):
+            # Block locktime in the future — auto-schedule
+            store.update_target_block(parsed.txid, parsed.locktime)
 
     # Resolve inputs async via scheduler's upstream (fee, coin age, scripthashes)
     scheduler = request.app.get("scheduler")
@@ -875,6 +889,7 @@ async def handle_schedule_price(request: web.Request) -> web.Response:
 
     price = body.get("target_price")
     direction = body.get("direction", "below")
+    expires_at = body.get("expires_at")  # ISO format: "2026-04-10T18:00"
 
     if not price or not isinstance(price, (int, float)) or price <= 0:
         return web.json_response({"error": "target_price (positive number) required"}, status=400)
@@ -886,10 +901,10 @@ async def handle_schedule_price(request: web.Request) -> web.Response:
     if not tx:
         return web.json_response({"error": "Transaction not found"}, status=404)
 
-    store.update_target_price(txid, float(price), direction)
-    log.info("Price-scheduled tx %s: %s $%.0f", txid[:16], direction, price)
+    store.update_target_price(txid, float(price), direction, expires_at=expires_at)
+    log.info("Price-scheduled tx %s: %s $%.0f expires=%s", txid[:16], direction, price, expires_at or "never")
 
-    return web.json_response({"ok": True, "target_price": price, "direction": direction})
+    return web.json_response({"ok": True, "target_price": price, "direction": direction, "expires_at": expires_at})
 
 
 async def handle_get_price(request: web.Request) -> web.Response:
@@ -900,6 +915,47 @@ async def handle_get_price(request: web.Request) -> web.Response:
         "price_usd": float(price_raw) if price_raw else None,
         "source": store.get_state("price_source") or "",
     })
+
+
+async def handle_discover_price_oracle(request: web.Request) -> web.Response:
+    """Probe known local addresses for El Oráculo (bitcoin-price-oracle)."""
+    import aiohttp as aio
+
+    candidates = [
+        {"host": "10.21.21.11", "port": 3200, "name": "El Oráculo"},
+        {"host": "127.0.0.1", "port": 3200, "name": "El Oráculo"},
+        {"host": "bitcoin-price-oracle", "port": 3200, "name": "El Oráculo"},
+    ]
+
+    results = []
+    timeout = aio.ClientTimeout(total=3)
+    async with aio.ClientSession(timeout=timeout) as session:
+        for c in candidates:
+            url = f"http://{c['host']}:{c['port']}"
+            try:
+                async with session.get(f"{url}/health") as resp:
+                    if resp.status == 200:
+                        data = await resp.json()
+                        if data.get("synced_height"):
+                            # Get current price
+                            price = None
+                            try:
+                                async with session.get(f"{url}/api/price/latest") as pr:
+                                    pd = await pr.json()
+                                    price = pd.get("price_usd")
+                            except Exception:
+                                pass
+                            results.append({
+                                "url": url,
+                                "name": c["name"],
+                                "synced_height": data["synced_height"],
+                                "price_usd": price,
+                                "online": True,
+                            })
+            except Exception:
+                pass
+
+    return web.json_response({"oracles": results})
 
 
 async def handle_vault(request: web.Request) -> web.Response:

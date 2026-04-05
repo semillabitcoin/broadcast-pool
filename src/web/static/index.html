@@ -24,6 +24,7 @@
     <button class="tab-btn active" data-tab="pool" onclick="switchTab('pool')" id="tab-btn-pool">Pool</button>
     <button class="tab-btn" data-tab="settings" onclick="switchTab('settings')" id="tab-btn-settings">Ajustes</button>
     <button class="tab-btn" data-tab="vault" onclick="switchTab('vault')" id="tab-btn-vault" style="display:none">Bóveda</button>
+    <span id="price-display" style="display:none;margin-left:auto;font-size:13px;color:var(--text-muted);align-self:center;padding-right:8px"></span>
   </div>
 
   <!-- ===================== POOL TAB ===================== -->
@@ -41,7 +42,7 @@
         <span class="status-value" id="s-height">--</span>
       </div>
       <div class="status-item">
-        <span class="status-label" id="lbl-mtp" title="">MTP <span class="help-tip" id="mtp-tip">?</span></span>
+        <span class="status-label" id="lbl-mtp">MTP <span class="help-tip" id="mtp-tip">?</span></span>
         <span class="status-value" style="font-size:14px" id="s-mtp">--</span>
       </div>
       <div class="status-item">
@@ -55,10 +56,6 @@
       <div class="status-item">
         <span class="status-label" id="lbl-connections">Conexiones</span>
         <span class="status-value" id="s-connections">0</span>
-      </div>
-      <div class="status-item" id="status-price" style="display:none">
-        <span class="status-label">BTC/USD</span>
-        <span class="status-value" style="font-size:16px;color:var(--mainnet)" id="s-price">--</span>
       </div>
     </div>
 
@@ -211,8 +208,8 @@
       <h3 class="settings-title" id="set-title-behavior">3. Comportamiento</h3>
 
       <div class="behavior-item">
-        <span class="behavior-bullet">&#x2022;</span>
         <div>
+          <strong class="behavior-subtitle" id="set-sub-locktime">Locktimes</strong>
           <p class="settings-help" id="set-behavior-desc" style="margin-bottom:6px"></p>
           <label style="display:flex;align-items:center;gap:8px;font-size:13px;color:var(--text-muted);cursor:pointer">
             <input type="checkbox" id="set-auto-locktime" checked onchange="savePrefAutoLocktime(this.checked)">
@@ -222,26 +219,26 @@
       </div>
 
       <div class="behavior-item">
-        <span class="behavior-bullet">&#x2022;</span>
         <div>
+          <strong class="behavior-subtitle" id="set-sub-price">Precio</strong>
           <p class="settings-help" id="set-price-desc" style="margin-bottom:6px"></p>
           <label style="display:flex;align-items:center;gap:8px;font-size:13px;color:var(--text-muted);cursor:pointer;margin-bottom:8px">
             <input type="checkbox" id="set-price-enabled" onchange="togglePriceSource(this.checked)">
             <span id="set-lbl-price-enabled">Activar retransmisión por precio</span>
           </label>
-          <div id="price-source-config" style="display:none;margin-left:24px">
-            <div class="settings-row">
-              <label class="settings-label" id="set-lbl-price-source">Fuente</label>
-              <select id="set-price-source" class="inline-edit" style="width:200px;padding:6px 8px" onchange="savePriceSource(this.value)">
-                <option value="" id="opt-price-none">Seleccionar...</option>
-                <option value="coingecko">CoinGecko API</option>
-                <option value="custom" id="opt-price-custom">Oráculo local</option>
-              </select>
-            </div>
-            <div id="price-custom-url" class="settings-row" style="display:none">
-              <label class="settings-label">URL</label>
-              <input type="text" id="set-price-url" class="inline-edit" style="width:280px" placeholder="http://umbrel.local:3200" onchange="savePriceSource('custom')">
-            </div>
+          <div id="price-source-config" style="display:none">
+            <div id="price-current-source" style="font-size:13px;color:var(--text-muted);margin-bottom:12px;"></div>
+            <div id="price-discovered" style="margin-bottom:12px;"></div>
+            <details class="manual-connection">
+              <summary id="price-manual-summary" style="cursor:pointer;font-size:13px;color:var(--text-muted);margin-bottom:12px;">URL manual</summary>
+              <div style="padding-top:8px;">
+                <div class="settings-row">
+                  <label class="settings-label">URL</label>
+                  <input type="text" id="set-price-url" class="inline-edit" style="width:280px" placeholder="http://umbrel.local:3200">
+                  <button class="small" onclick="connectPriceUrl()" style="margin-left:8px;" id="btn-price-connect">Conectar</button>
+                </div>
+              </div>
+            </details>
           </div>
         </div>
       </div>

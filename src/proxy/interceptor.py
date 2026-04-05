@@ -84,16 +84,16 @@ class Interceptor:
         auto_lock = self.store.get_state("auto_schedule_locktime") != "false"
 
         if parsed.locktime >= 500_000_000 and auto_lock:
-            # Unix timestamp locktime — scheduler will broadcast when MTP passes it
+            # Unix timestamp locktime — mark as scheduled, scheduler will broadcast when MTP passes
             from datetime import datetime
             dt = datetime.utcfromtimestamp(parsed.locktime).strftime("%Y-%m-%d %H:%M UTC")
+            self.store.update_status(parsed.txid, "scheduled")
             log.info(
-                "Retained tx %s with timestamp locktime=%d (%s, %.1f sat/vB) — will broadcast when MTP passes",
+                "Retained tx %s with timestamp locktime=%d (%s, %.1f sat/vB) — scheduled for MTP",
                 parsed.txid[:16], parsed.locktime, dt, parsed.fee_rate,
             )
         elif (0 < parsed.locktime < 500_000_000
-                and current_height > 0
-                and parsed.locktime > current_height + 1
+                and parsed.locktime > max(current_height, 1) + 1
                 and auto_lock):
             # Real future block height locktime — auto-schedule
             self.store.update_target_block(parsed.txid, parsed.locktime)

@@ -26,6 +26,7 @@ class RetainedTx:
     target_block: int | None
     target_price: float | None
     price_direction: str | None
+    expires_at: str | None
     sort_order: int
     error_message: str | None
     confirmed_block: int | None
@@ -301,14 +302,14 @@ class TxStore:
                 )
             self._conn.commit()
 
-    def update_target_price(self, txid: str, price: float, direction: str = "below") -> None:
+    def update_target_price(self, txid: str, price: float, direction: str = "below", expires_at: str | None = None) -> None:
         with self._lock:
             self._conn.execute(
                 """UPDATE retained_txs
-                   SET target_price = ?, price_direction = ?, status = 'scheduled',
-                       updated_at = datetime('now')
+                   SET target_price = ?, price_direction = ?, expires_at = ?,
+                       status = 'scheduled', updated_at = datetime('now')
                    WHERE txid = ?""",
-                (price, direction, txid),
+                (price, direction, expires_at, txid),
             )
             self._conn.commit()
 
