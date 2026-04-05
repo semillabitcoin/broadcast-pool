@@ -1713,11 +1713,16 @@ async function scheduleByPrice(txid) {
   const body = { target_price: price, direction: dir };
   if (expiryInput) body.expires_at = expiryInput;
 
-  await fetchJSON('/api/txs/' + txid + '/schedule-price', {
+  const result = await fetchJSON('/api/txs/' + txid + '/schedule-price', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
   });
+
+  if (result.error) {
+    alert('Error: ' + result.error);
+    return;
+  }
 
   const picker = document.getElementById('pricepicker-' + txid);
   if (picker) picker.remove();

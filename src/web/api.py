@@ -898,7 +898,8 @@ async def handle_schedule_price(request: web.Request) -> web.Response:
     expires_at = body.get("expires_at")
     if expires_at:
         try:
-            datetime.fromisoformat(str(expires_at).replace("Z", "+00:00"))
+            from datetime import datetime as dt
+            dt.fromisoformat(str(expires_at).replace("Z", "+00:00"))
         except (ValueError, TypeError):
             return web.json_response({"error": "expires_at must be ISO format"}, status=400)
 
