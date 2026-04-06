@@ -68,15 +68,22 @@ class Scheduler:
             return {"error": "Transaction not found"}
         if tx.status == "expired":
             return {"error": "Transaction expired — cannot broadcast"}
-        # Check expiry even if status hasn't been updated yet
+        # Check expiry even if status hasn't been updated yet (fail-closed)
         if tx.expires_at:
-            from datetime import datetime as dt
             try:
-                if dt.utcnow().strftime("%Y-%m-%dT%H:%M") >= tx.expires_at:
+                exp = datetime.fromisoformat(tx.expires_at.replace("Z", "+00:00"))
+                if exp.tzinfo is None:
+                    exp = exp.replace(tzinfo=None)
+                    now = datetime.utcnow()
+                else:
+                    from datetime import timezone
+                    now = datetime.now(timezone.utc)
+                if now >= exp:
                     self.store.update_status(tx.txid, "expired")
                     return {"error": "Transaction expired — cannot broadcast"}
-            except Exception:
-                pass
+            except Exception as e:
+                log.error("Cannot parse expires_at for %s: %s", tx.txid[:16], e)
+                return {"error": "Cannot verify expiration — refusing to broadcast"}
         if tx.status not in ("pending", "scheduled"):
             return {"error": f"Cannot broadcast tx in status '{tx.status}'"}
 
@@ -269,23 +276,32 @@ class Scheduler:
 
     def _purge_expired_txs(self) -> None:
         """Mark price-scheduled txs as expired when their expiry has passed."""
-        now = datetime.utcnow().strftime("%Y-%m-%dT%H:%M")
+        now = datetime.utcnow()
         with self.store._lock:
             rows = self.store._conn.execute(
-                """SELECT txid FROM retained_txs
-                   WHERE status = 'scheduled' AND expires_at IS NOT NULL AND expires_at <= ?
+                """SELECT txid, expires_at FROM retained_txs
+                   WHERE status = 'scheduled' AND expires_at IS NOT NULL
                    AND network = ?""",
-                (now, self.store.network),
+                (self.store.network,),
             ).fetchall()
+            updated = 0
             for r in rows:
-                self.store._conn.execute(
-                    """UPDATE retained_txs
-                       SET status = 'expired', updated_at = datetime('now')
-                       WHERE txid = ?""",
-                    (r["txid"],),
-                )
-                log.info("Tx %s expired (past %s)", r["txid"][:16], now)
-            if rows:
+                try:
+                    exp = datetime.fromisoformat(r["expires_at"].replace("Z", "+00:00"))
+                    if exp.tzinfo is not None:
+                        exp = exp.replace(tzinfo=None)
+                except Exception:
+                    continue
+                if now >= exp:
+                    self.store._conn.execute(
+                        """UPDATE retained_txs
+                           SET status = 'expired', updated_at = datetime('now')
+                           WHERE txid = ?""",
+                        (r["txid"],),
+                    )
+                    log.info("Tx %s expired (past %s)", r["txid"][:16], r["expires_at"])
+                    updated += 1
+            if updated:
                 self.store._conn.commit()
 
     async def _do_broadcast(self, tx, _depth=0) -> dict:
@@ -348,9 +364,11 @@ class Scheduler:
                 return {"txid": resp.get("result", tx.txid)}
 
         except Exception as e:
-            self.store.update_status(tx.txid, "failed", error=str(e))
-            log.error("Broadcast exception for %s: %s", tx.txid[:16], e)
-            return {"error": str(e)}
+            # Network/timeout error — tx may have reached the mempool anyway.
+            # Keep status as 'broadcasting' so _check_confirmations verifies it.
+            self.store.update_broadcast_time(tx.txid)
+            log.warning("Broadcast exception for %s (will verify): %s", tx.txid[:16], e)
+            return {"txid": tx.txid, "warning": str(e)}
 
     async def _check_confirmations(self) -> None:
         """Check if broadcasting or failed txs have been confirmed.
@@ -363,7 +381,24 @@ class Scheduler:
             + self.store.get_all_txs(status="failed")
         )
 
+        # Watchdog: txs stuck in broadcasting > 60 min without confirmation → mark failed
+        now = datetime.utcnow()
         for tx in to_check:
+            if tx.status == "broadcasting" and tx.broadcast_at:
+                try:
+                    bcast = datetime.fromisoformat(tx.broadcast_at.replace("Z", "+00:00"))
+                    if bcast.tzinfo is not None:
+                        bcast = bcast.replace(tzinfo=None)
+                    if (now - bcast).total_seconds() > 3600:
+                        self.store.update_status(
+                            tx.txid, "failed",
+                            error="Broadcast unverified after 60 minutes"
+                        )
+                        log.warning("Tx %s timed out in broadcasting state", tx.txid[:16])
+                        continue
+                except Exception:
+                    pass
+
             scripthashes = self.store.get_scripthashes_for_tx(tx.txid)
             if not scripthashes:
                 continue
