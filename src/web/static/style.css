@@ -49,6 +49,7 @@ h1 { font-size: 24px; font-weight: 600; margin-bottom: 4px; }
 .behavior-item { display: flex; gap: 8px; margin-bottom: 10px; }
 .behavior-bullet { color: var(--text-muted); font-size: 16px; line-height: 1.4; flex-shrink: 0; }
 .behavior-subtitle { font-size: 13px; color: var(--text); display: block; margin-bottom: 4px; }
+.behavior-item > div > *:not(.behavior-subtitle) { margin-left: 18px; }
 
 /* Server cards */
 .server-card {

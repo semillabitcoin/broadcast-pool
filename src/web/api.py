@@ -615,6 +615,7 @@ async def handle_status(request: web.Request) -> web.Response:
         "proxy_port": config.PROXY_PORT,
         "current_price": float(store.get_state("current_price") or 0) or None,
         "price_source": store.get_state("price_source") or "",
+        "liana_height_offset": int(store.get_state("liana_height_offset") or "0"),
     }
     return web.json_response(data)
 
@@ -631,6 +632,8 @@ async def handle_get_settings(request: web.Request) -> web.Response:
         "auto_schedule_locktime": store.get_state("auto_schedule_locktime") != "false",
         "price_source": store.get_state("price_source") or "",
         "price_enabled": bool(store.get_state("price_source")),
+        "liana_height_offset": int(store.get_state("liana_height_offset") or "0"),
+        "liana_increment_rate": int(store.get_state("liana_increment_rate") or "0"),
     })
 
 
@@ -883,6 +886,30 @@ async def handle_set_preferences(request: web.Request) -> web.Response:
         store.set_state("price_source", source)
         if not source:
             store.set_state("current_price", "")
+
+    if "liana_height_offset" in body:
+        try:
+            offset = int(body["liana_height_offset"])
+            if offset < 0 or offset > 70000:
+                return web.json_response(
+                    {"error": "liana_height_offset must be 0-70000 (~15 months)"},
+                    status=400,
+                )
+            store.set_state("liana_height_offset", str(offset))
+        except (ValueError, TypeError):
+            return web.json_response({"error": "liana_height_offset must be an integer"}, status=400)
+
+    if "liana_increment_rate" in body:
+        try:
+            rate = int(body["liana_increment_rate"])
+            if rate < 0 or rate > 60:
+                return web.json_response(
+                    {"error": "liana_increment_rate must be 0-60 seconds"},
+                    status=400,
+                )
+            store.set_state("liana_increment_rate", str(rate))
+        except (ValueError, TypeError):
+            return web.json_response({"error": "liana_increment_rate must be an integer"}, status=400)
 
     return web.json_response({"ok": True})
 

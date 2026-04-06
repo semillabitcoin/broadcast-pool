@@ -41,9 +41,13 @@
         <span class="status-label" id="lbl-height">Altura</span>
         <span class="status-value" id="s-height">--</span>
       </div>
-      <div class="status-item">
+      <div class="status-item" id="status-mtp">
         <span class="status-label" id="lbl-mtp">MTP <span class="help-tip" id="mtp-tip">?</span></span>
         <span class="status-value" id="s-mtp">--</span>
+      </div>
+      <div class="status-item" id="status-virtual-height" style="display:none">
+        <span class="status-label" id="lbl-virtual-height">Altura virtual <span class="help-tip" id="vh-tip">?</span></span>
+        <span class="status-value" style="color:var(--green)" id="s-virtual-height">--</span>
       </div>
       <div class="status-item">
         <span class="status-label" id="lbl-retained">Retenidas</span>
@@ -240,6 +244,29 @@
               </div>
             </details>
             <div id="price-current-source" class="connected-label" style="margin-top:12px;"></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="behavior-item">
+        <div>
+          <strong class="behavior-subtitle" id="set-sub-liana">Falseando altura de bloque (experimental)</strong>
+          <p class="settings-help" id="set-liana-desc" style="margin-bottom:6px"></p>
+          <label style="display:flex;align-items:center;gap:8px;font-size:13px;color:var(--text-muted);cursor:pointer;margin-bottom:8px">
+            <input type="checkbox" id="set-liana-enabled" onchange="toggleLianaFake(this.checked)">
+            <span id="set-lbl-liana-enabled">Activar falseado de altura de bloque</span>
+          </label>
+          <div id="liana-fake-config" style="opacity:0.4;pointer-events:none">
+            <div class="settings-row">
+              <label class="settings-label" id="set-lbl-liana-offset">Offset</label>
+              <input type="number" id="set-liana-offset" class="inline-edit" style="width:120px" min="0" max="70000" placeholder="0" value="0" oninput="updateLianaOffsetLabel(this.value)" onchange="saveLianaOffset(this.value)" disabled>
+              <span style="font-size:13px;color:var(--text-muted)" id="set-liana-offset-eq">desactivado</span>
+            </div>
+            <div class="settings-row">
+              <label class="settings-label" id="set-lbl-liana-increment">Avance</label>
+              <input type="number" id="set-liana-increment" class="inline-edit" style="width:80px" min="0" max="60" placeholder="0" value="0" onchange="saveLianaIncrement(this.value)" disabled>
+              <span style="font-size:13px;color:var(--text-muted)" id="set-liana-increment-label">seg/bloque (0=sin avance)</span>
+            </div>
           </div>
         </div>
       </div>

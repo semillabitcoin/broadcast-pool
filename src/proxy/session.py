@@ -37,6 +37,13 @@ class ElectrumSession:
         self._pending_methods: dict[int, tuple[str, list]] = {}
         self._closed = False
 
+        # Liana height-offset state (PoC: fake future block height)
+        self._liana_offset: int = 0  # 0 = disabled
+        self._real_tip_height: int | None = None
+        self._real_tip_header: str | None = None
+        self._fake_chain: list[bytes] = []  # cached fake headers
+        self._liana_increment_task: asyncio.Task | None = None
+
         peer = client_writer.get_extra_info("peername")
         self.peer_str = f"{peer[0]}:{peer[1]}" if peer else "unknown"
 
@@ -116,6 +123,96 @@ class ElectrumSession:
                 continue
 
             await self._handle_client_message(msg)
+
+    def _is_liana(self) -> bool:
+        return bool(
+            self.interceptor
+            and self.interceptor.wallet_label
+            and "liana" in self.interceptor.wallet_label.lower()
+        )
+
+    def _load_liana_offset(self) -> int:
+        """Read offset from store. Only applies to Liana sessions."""
+        if not self._is_liana():
+            return 0
+        raw = self.store.get_state("liana_height_offset") or "0"
+        try:
+            return max(0, min(70000, int(raw)))  # cap ~15 months
+        except ValueError:
+            return 0
+
+    def _rebuild_fake_chain(self, real_tip_height: int, real_tip_header_hex: str) -> None:
+        """Generate fake header chain from current real tip."""
+        from src.proxy.header_faker import generate_fake_chain
+        self._real_tip_height = real_tip_height
+        self._real_tip_header = real_tip_header_hex
+        self._liana_offset = self._load_liana_offset()
+        if self._liana_offset > 0:
+            self._fake_chain = generate_fake_chain(real_tip_header_hex, self._liana_offset)
+            log.warning(
+                "[%s] EXPERIMENTAL: serving fake tip %d (real %d, offset %d) to Liana",
+                self.peer_str,
+                real_tip_height + self._liana_offset,
+                real_tip_height,
+                self._liana_offset,
+            )
+            # Start auto-increment task if configured
+            rate_raw = self.store.get_state("liana_increment_rate") or "0"
+            try:
+                rate = int(rate_raw)
+            except ValueError:
+                rate = 0
+            if self._liana_increment_task:
+                self._liana_increment_task.cancel()
+                self._liana_increment_task = None
+            if rate > 0:
+                self._liana_increment_task = asyncio.create_task(self._auto_increment_loop(rate))
+        else:
+            self._fake_chain = []
+
+    async def _auto_increment_loop(self, rate_seconds: int) -> None:
+        """Periodically extend fake chain by 1 block and notify Liana."""
+        from src.proxy.header_faker import sha256d, build_header, parse_header
+        try:
+            while not self._closed and self._fake_chain:
+                await asyncio.sleep(rate_seconds)
+                if not self._fake_chain or self._real_tip_height is None:
+                    break
+                # Build new fake header chaining from last
+                last = self._fake_chain[-1]
+                last_parsed = parse_header(last.hex())
+                new_header = build_header(
+                    version=4,
+                    prev_hash=sha256d(last),
+                    merkle_root=b"\x00" * 32,
+                    time=last_parsed["time"] + 600,
+                    bits=last_parsed["bits"],
+                    nonce=0,
+                )
+                self._fake_chain.append(new_header)
+                self._liana_offset += 1
+                new_tip_height = self._real_tip_height + self._liana_offset
+                # Push notification to Liana
+                notif = {
+                    "jsonrpc": "2.0",
+                    "method": "blockchain.headers.subscribe",
+                    "params": [{"height": new_tip_height, "hex": new_header.hex()}],
+                }
+                await self.send_to_client(notif)
+                log.debug("[%s] Auto-advanced fake tip to %d", self.peer_str, new_tip_height)
+        except asyncio.CancelledError:
+            pass
+        except Exception as e:
+            log.warning("[%s] Auto-increment error: %s", self.peer_str, e)
+
+    def _fake_header_at(self, height: int) -> str | None:
+        """Return fake header hex for a height in the offset range, or None."""
+        if not self._fake_chain or self._real_tip_height is None:
+            return None
+        idx = height - self._real_tip_height - 1
+        if 0 <= idx < len(self._fake_chain):
+            return self._fake_chain[idx].hex()
+        return None
 
     async def _handle_client_message(self, msg: dict, collect: bool = False):
         """Process a single client message."""
@@ -199,6 +296,46 @@ class ElectrumSession:
                     return
                 # verbose=true: fall through to upstream (which may not have it)
 
+        # --- LIANA HEIGHT-OFFSET PoC: intercept block headers ---
+        if self._is_liana() and self._load_liana_offset() > 0:
+            # block.header(N) — serve fake from cache if N > real_tip
+            if method == "blockchain.block.header" and params:
+                requested_height = params[0]
+                if self._real_tip_height is not None and requested_height > self._real_tip_height:
+                    fake_hex = self._fake_header_at(requested_height)
+                    if fake_hex:
+                        response = {"jsonrpc": "2.0", "result": fake_hex, "id": msg_id}
+                        if collect:
+                            return response
+                        await self.send_to_client(response)
+                        return
+
+            # block.headers(start, count) — serve fake range
+            if method == "blockchain.block.headers" and len(params) >= 2:
+                start = params[0]
+                count = params[1]
+                if self._real_tip_height is not None and start > self._real_tip_height:
+                    headers_hex = ""
+                    actual = 0
+                    for i in range(count):
+                        h = self._fake_header_at(start + i)
+                        if h:
+                            headers_hex += h
+                            actual += 1
+                    response = {
+                        "jsonrpc": "2.0",
+                        "result": {"hex": headers_hex, "count": actual, "max": 2016},
+                        "id": msg_id,
+                    }
+                    if collect:
+                        return response
+                    await self.send_to_client(response)
+                    return
+
+            # headers.subscribe — track for response modification
+            if method == "blockchain.headers.subscribe":
+                self._pending_methods[msg_id] = ("blockchain.headers.subscribe", [])
+
         # --- INTERCEPTED: broadcast ---
         if method == "blockchain.transaction.broadcast":
             log.info("[%s] Intercepting broadcast (id=%s)", self.peer_str, msg_id)
@@ -246,6 +383,15 @@ class ElectrumSession:
                 result = msg.get("result", [])
                 if isinstance(result, list) and len(result) >= 2:
                     msg["result"] = ["Broadcast Pool v0.1.0 (Semilla Bitcoin)", result[1]]
+            elif method == "blockchain.headers.subscribe":
+                # Liana height-offset: rebuild fake chain from real tip and return fake tip
+                result = msg.get("result", {})
+                if isinstance(result, dict) and "height" in result and "hex" in result:
+                    self._rebuild_fake_chain(result["height"], result["hex"])
+                    if self._fake_chain:
+                        fake_tip_height = result["height"] + self._liana_offset
+                        fake_tip_hex = self._fake_chain[-1].hex()
+                        msg["result"] = {"height": fake_tip_height, "hex": fake_tip_hex}
             elif method == "blockchain.scripthash.get_history":
                 msg = self.interceptor.modify_get_history(msg, scripthash)
             elif method == "blockchain.scripthash.listunspent":
@@ -265,6 +411,22 @@ class ElectrumSession:
         if notif_method == "blockchain.scripthash.subscribe" and notif_params:
             notif_params = await self.interceptor.modify_subscribe_notification(notif_params)
             msg["params"] = notif_params
+
+        # Liana height-offset: rebuild fake chain on every new real block
+        if (notif_method == "blockchain.headers.subscribe"
+                and notif_params
+                and self._is_liana()
+                and self._load_liana_offset() > 0):
+            try:
+                header_obj = notif_params[0]
+                if isinstance(header_obj, dict) and "height" in header_obj and "hex" in header_obj:
+                    self._rebuild_fake_chain(header_obj["height"], header_obj["hex"])
+                    if self._fake_chain:
+                        fake_tip_height = header_obj["height"] + self._liana_offset
+                        fake_tip_hex = self._fake_chain[-1].hex()
+                        msg["params"] = [{"height": fake_tip_height, "hex": fake_tip_hex}]
+            except Exception as e:
+                log.warning("[%s] Failed to fake notification: %s", self.peer_str, e)
 
         await self.send_to_client(msg)
 
@@ -355,6 +517,9 @@ class ElectrumSession:
         if self._closed:
             return
         self._closed = True
+
+        if self._liana_increment_task:
+            self._liana_increment_task.cancel()
 
         pending_count = len(self._pending_methods)
         if pending_count:

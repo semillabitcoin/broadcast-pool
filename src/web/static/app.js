@@ -68,7 +68,12 @@ const i18n = {
     connectLan: 'Red local',
     copied: 'copiado',
     autoLocktime: 'Auto agendar transacciones con locktime futuro',
-    subLocktime: 'Locktimes', subPrice: 'Precio',
+    subLocktime: 'A. Auto programado para nLockTimes futuros', subPrice: 'B. Precio',
+    subLiana: 'C. Falseando altura de bloque (experimental)',
+    lianaDesc: 'Para wallets que no dejan configurar el nLockTime y lo ajustan ellas mismas a la altura de bloque actual, define el desfase de bloques que quieres mostrar. Pensado para billeteras como Liana, especialmente para programar transacciones de ciclado durante los pr\u00f3ximos meses o a\u00f1o:',
+    lianaOffset: 'Offset', lianaIncrement: 'Avance',
+    lianaIncrementLabel: 'seg/bloque (0=sin avance)',
+    lianaEnabled: 'Activar falseado de altura de bloque',
     priceDesc: 'Retransmitir transacciones autom\u00e1ticamente cuando el precio de Bitcoin cruce un umbral. Pensado para enviar colateral adicional a contratos de pr\u00e9stamo y evitar liquidaciones:',
     priceEnabled: 'Activar retransmisi\u00f3n por precio',
     priceSource: 'Fuente', priceNone: 'Seleccionar...', priceCustom: 'Or\u00e1culo local',
@@ -83,6 +88,8 @@ const i18n = {
     copyHex: 'Copiar tx hex', copyTxid: 'Copiar txid',
     mtpLag: 'MTP lag', mtpPassed: 'MTP ya paso esta fecha',
     mtpTip: 'Median Time Past: mediana de los timestamps de los \u00faltimos 11 bloques. El reloj que usa Bitcoin para evaluar nLocktimes en base a tiempo.',
+    virtualHeight: 'Altura virtual',
+    vhTip: 'Altura de bloque falsa que BP est\u00e1 enviando a las wallets cuando el falseado est\u00e1 activo. Las wallets firmar\u00e1n txs con nLockTime cerca de este valor.',
     mtpWill: 'MTP la alcanzara en',
   },
   en: {
@@ -143,7 +150,12 @@ const i18n = {
     connectLan: 'Local network',
     copied: 'copied',
     autoLocktime: 'Auto-schedule transactions with future locktime',
-    subLocktime: 'Locktimes', subPrice: 'Price',
+    subLocktime: 'A. Auto-scheduling for future nLockTimes', subPrice: 'B. Price',
+    subLiana: 'C. Faking blockheight (experimental)',
+    lianaDesc: 'For wallets that do not let you configure nLockTime and set it themselves to the current block height, define the block offset you want to show. Designed for wallets like Liana, especially for scheduling cycling transactions over the next months or year:',
+    lianaOffset: 'Offset', lianaIncrement: 'Advance',
+    lianaIncrementLabel: 'sec/block (0=no advance)',
+    lianaEnabled: 'Enable blockheight faking',
     priceDesc: 'Automatically broadcast transactions when the Bitcoin price crosses a threshold. Designed to send additional collateral to loan contracts and avoid liquidations:',
     priceEnabled: 'Enable price-based broadcast',
     priceSource: 'Source', priceNone: 'Select...', priceCustom: 'Local oracle',
@@ -158,6 +170,8 @@ const i18n = {
     copyHex: 'Copy tx hex', copyTxid: 'Copy txid',
     mtpLag: 'MTP lag', mtpPassed: 'MTP already passed this date',
     mtpTip: 'Median Time Past: median of the last 11 block timestamps. The clock Bitcoin uses to evaluate time-based nLocktimes.',
+    virtualHeight: 'Virtual height',
+    vhTip: 'Fake block height that BP is serving to wallets when faking is active. Wallets will sign txs with nLockTime close to this value.',
     mtpWill: 'MTP will reach it in',
   },
 };
@@ -185,6 +199,7 @@ function applyLang() {
   document.getElementById('lbl-net').textContent = t('net');
   document.getElementById('lbl-height').textContent = t('height');
   document.getElementById('lbl-mtp').innerHTML = t('mtp') + ' <span class="help-tip" onclick="toggleTooltip(event,\'mtp-detail\')">?<span class="lock-detail" id="mtp-detail">' + t('mtpTip') + '</span></span>';
+  document.getElementById('lbl-virtual-height').innerHTML = t('virtualHeight') + ' <span class="help-tip" onclick="toggleTooltip(event,\'vh-detail\')">?<span class="lock-detail" id="vh-detail">' + t('vhTip') + '</span></span>';
   document.getElementById('lbl-retained').textContent = t('retained');
   document.getElementById('lbl-scheduled').textContent = t('scheduled');
   document.getElementById('lbl-connections').textContent = t('connections');
@@ -207,6 +222,12 @@ function applyLang() {
   document.getElementById('set-sub-locktime').textContent = t('subLocktime');
   document.getElementById('set-behavior-desc').textContent = t('setBehaviorDesc');
   document.getElementById('set-lbl-auto-locktime').textContent = t('autoLocktime');
+  document.getElementById('set-sub-liana').textContent = t('subLiana');
+  document.getElementById('set-liana-desc').textContent = t('lianaDesc');
+  document.getElementById('set-lbl-liana-offset').textContent = t('lianaOffset');
+  document.getElementById('set-lbl-liana-increment').textContent = t('lianaIncrement');
+  document.getElementById('set-liana-increment-label').textContent = t('lianaIncrementLabel');
+  document.getElementById('set-lbl-liana-enabled').textContent = t('lianaEnabled');
   document.getElementById('set-sub-price').textContent = t('subPrice');
   document.getElementById('set-price-desc').textContent = t('priceDesc');
   document.getElementById('set-lbl-price-enabled').textContent = t('priceEnabled');
@@ -324,6 +345,19 @@ function updateStatus(s) {
   const aaBase = document.getElementById('aa-base');
   if (!aaBase.value && s.current_height) {
     aaBase.value = s.current_height + 6;
+  }
+
+  // Virtual height display (replaces MTP when faking is active)
+  const mtpEl = document.getElementById('status-mtp');
+  const vhEl = document.getElementById('status-virtual-height');
+  if (s.liana_height_offset && s.liana_height_offset > 0 && s.current_height) {
+    mtpEl.style.display = 'none';
+    vhEl.style.display = '';
+    document.getElementById('s-virtual-height').textContent =
+      (s.current_height + s.liana_height_offset).toLocaleString();
+  } else {
+    mtpEl.style.display = '';
+    vhEl.style.display = 'none';
   }
 
   // Price display (next to tabs)
@@ -1285,6 +1319,14 @@ async function loadSettingsTab() {
   document.getElementById('set-lang').value = lang;
   document.getElementById('set-unit').value = unit;
   document.getElementById('set-auto-locktime').checked = s.auto_schedule_locktime !== false;
+  const lianaOffset = s.liana_height_offset || 0;
+  const lianaRate = s.liana_increment_rate || 0;
+  const lianaEnabled = lianaOffset > 0 || lianaRate > 0;
+  document.getElementById('set-liana-enabled').checked = lianaEnabled;
+  document.getElementById('set-liana-offset').value = lianaOffset;
+  document.getElementById('set-liana-increment').value = lianaRate;
+  toggleLianaFake(lianaEnabled);
+  updateLianaOffsetLabel(lianaOffset);
 
   // Price
   const priceEnabled = !!s.price_source;
@@ -1611,6 +1653,59 @@ function savePrefAutoLocktime(checked) {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ auto_schedule_locktime: checked }),
   });
+}
+
+function updateLianaOffsetLabel(val) {
+  const blocks = parseInt(val) || 0;
+  const days = Math.round(blocks * 10 / 1440 * 10) / 10;  // 10 min/block
+  const eq = document.getElementById('set-liana-offset-eq');
+  if (eq) {
+    if (blocks === 0) eq.textContent = lang === 'es' ? 'desactivado' : 'disabled';
+    else if (days < 30) eq.textContent = `~${days} ${lang === 'es' ? 'días' : 'days'}`;
+    else if (days < 365) eq.textContent = `~${Math.round(days/30*10)/10} ${lang === 'es' ? 'meses' : 'months'}`;
+    else eq.textContent = `~${Math.round(days/365*10)/10} ${lang === 'es' ? 'años' : 'years'}`;
+  }
+}
+
+function saveLianaOffset(val) {
+  const offset = parseInt(val) || 0;
+  fetchJSON('/api/preferences', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ liana_height_offset: offset }),
+  });
+}
+
+function saveLianaIncrement(val) {
+  const rate = parseInt(val) || 0;
+  fetchJSON('/api/preferences', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ liana_increment_rate: rate }),
+  });
+}
+
+function toggleLianaFake(enabled) {
+  const config = document.getElementById('liana-fake-config');
+  const offsetInput = document.getElementById('set-liana-offset');
+  const incrementInput = document.getElementById('set-liana-increment');
+  if (enabled) {
+    config.style.opacity = '1';
+    config.style.pointerEvents = 'auto';
+    offsetInput.disabled = false;
+    incrementInput.disabled = false;
+  } else {
+    config.style.opacity = '0.4';
+    config.style.pointerEvents = 'none';
+    offsetInput.disabled = true;
+    incrementInput.disabled = true;
+    // Reset to 0 when disabled
+    offsetInput.value = 0;
+    incrementInput.value = 0;
+    updateLianaOffsetLabel(0);
+    saveLianaOffset(0);
+    saveLianaIncrement(0);
+  }
 }
 
 function togglePriceSource(enabled) {
