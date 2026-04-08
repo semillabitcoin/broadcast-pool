@@ -27,6 +27,7 @@ class RetainedTx:
     target_price: float | None
     price_direction: str | None
     expires_at: str | None
+    vaulted: int
     sort_order: int
     error_message: str | None
     confirmed_block: int | None
@@ -356,12 +357,12 @@ class TxStore:
         if not tx:
             return
 
-        # Check if already in vault (avoid duplicates)
-        existing = self._conn.execute(
-            "SELECT id FROM vault_entries WHERE payload LIKE ? LIMIT 1",
-            (f"%{txid[:16]}%",),
+        # Skip if already vaulted (prevents duplicates from multiple
+        # callers: set_confirmed, purge_confirmed, re-runs after restart)
+        row = self._conn.execute(
+            "SELECT vaulted FROM retained_txs WHERE txid = ?", (txid,)
         ).fetchone()
-        if existing:
+        if row and row["vaulted"]:
             return
 
         # Classify
@@ -402,6 +403,9 @@ class TxStore:
                 self._conn.execute(
                     "INSERT INTO vault_entries (ephem_pubkey, payload, network) VALUES (?, ?, ?)",
                     (encrypted["ephem_pubkey"], encrypted["payload"], tx.network),
+                )
+                self._conn.execute(
+                    "UPDATE retained_txs SET vaulted = 1 WHERE txid = ?", (txid,)
                 )
                 self._conn.commit()
             import logging
@@ -564,7 +568,8 @@ class TxStore:
             rows = self._conn.execute(
                 """SELECT txid, fee_sats, fee_rate, vsize, amount_sats,
                           input_count, output_count, network, wallet_label,
-                          status, target_block, confirmed_block, broadcast_at, created_at
+                          status, target_block, confirmed_block, broadcast_at, created_at,
+                          vaulted
                    FROM retained_txs
                    WHERE status IN ('confirmed', 'abandoned', 'replaced', 'expired')
                      AND (
@@ -609,9 +614,9 @@ class TxStore:
                     (date, r["network"], tx_type, wallet_short),
                 )
 
-                # Encrypt to vault if npub configured
+                # Encrypt to vault if npub configured (skip if already vaulted)
                 npub = self.get_state("npub")
-                if npub:
+                if npub and not r["vaulted"]:
                     try:
                         from src.pool.nip44 import encrypt_for_npub
                         vault_data = {
