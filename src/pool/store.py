@@ -176,6 +176,23 @@ class TxStore:
         ).fetchall()
         return [RetainedTx(**dict(r)) for r in rows]
 
+    def find_active_txs_spending_utxo(self, prev_txid: str, prev_vout: int) -> list[str]:
+        """Return txids of active retained txs whose inputs spend the given UTXO.
+
+        Used by the import flow to detect double-spend conflicts between an
+        imported tx and the existing pool, on the active network.
+        """
+        rows = self._conn.execute(
+            """SELECT t.txid
+               FROM retained_tx_inputs i
+               JOIN retained_txs t ON t.txid = i.txid
+               WHERE i.prev_txid = ? AND i.prev_vout = ?
+                 AND t.network = ?
+                 AND t.status IN ('pending', 'scheduled')""",
+            (prev_txid, prev_vout, self._network),
+        ).fetchall()
+        return [r["txid"] for r in rows]
+
     def get_spent_outpoints_for_scripthash(self, scripthash: str) -> set[tuple[str, int]]:
         """Get outpoints spent by active retained txs for a scripthash on active network."""
         rows = self._conn.execute(

@@ -72,13 +72,43 @@ const i18n = {
     subLiana: 'C. Falseando altura de bloque (experimental)',
     lianaDesc: 'Para wallets que no dejan configurar el nLockTime y lo ajustan ellas mismas a la altura de bloque actual, define el desfase de bloques que quieres mostrar. Pensado para billeteras como Liana, especialmente para programar transacciones de ciclado durante los pr\u00f3ximos meses o a\u00f1o:',
     lianaOffset: 'Offset', lianaIncrement: 'Avance',
-    lianaIncrementLabel: 'seg/bloque (0=sin avance)',
-    lianaEnabled: 'Activar falseado de altura de bloque',
+    lianaIncrementLabel: 'por bloque virtual',
+    lianaDisableAt: 'Auto-desactivar',
+    lianaDisableAtTemplate: 'en bloque {n} (faltan {k} bloques)',
+    lianaDisableAtPassed: 'pendiente — se desactivará en el próximo bloque',
+    lianaEnabled: 'Activar falseado de altura de bloque (se desactiva automáticamente a los 12 bloques reales)',
+    lianaEnabledActive: 'Activar falseado de altura de bloque (se desactiva automáticamente a los 12 bloques reales en {n})',
     priceDesc: 'Retransmitir transacciones autom\u00e1ticamente cuando el precio de Bitcoin cruce un umbral. Pensado para enviar colateral adicional a contratos de pr\u00e9stamo y evitar liquidaciones:',
     priceEnabled: 'Activar retransmisi\u00f3n por precio',
     priceSource: 'Fuente', priceNone: 'Seleccionar...', priceCustom: 'Or\u00e1culo local',
     priceSchedule: 'Retransmitir si BTC', priceBelow: 'cae por debajo de', priceAbove: 'sube por encima de',
     priceExpiry: 'Caduca', priceExpired: 'expirada',
+    setTitleBackup: '5. Copia de seguridad del pool',
+    setBackupHelp: 'Exporta tus transacciones activas (pending + scheduled) a un archivo cifrado para no perderlas si reinicias o migras BP. Re-imp\u00f3rtalas m\u00e1s tarde sin tener que volver a firmar.',
+    poolExport: 'Exportar pool', poolImport: 'Importar pool',
+    exportModalTitle: 'Exportar pool',
+    exportModalHelp: 'Elige c\u00f3mo cifrar el archivo. El export incluye solo transacciones activas (pending + scheduled).',
+    exportMethodPassphrase: 'Passphrase', exportMethodNip44: 'NIP-44 (tu npub)',
+    exportPassphrasePlaceholder: 'Passphrase (m\u00edn 8)',
+    exportPassphraseConfirmPlaceholder: 'Confirma passphrase',
+    exportPassphraseWarn: '\u26a0 Si pierdes la passphrase, el archivo es irrecuperable.',
+    exportNip44Help: 'Se cifrar\u00e1 con la npub configurada en BP. Para descifrar al importar necesitar\u00e1s una extensi\u00f3n NIP-07 (Alby, nos2x).',
+    exportNip44NoNpub: 'No tienes npub configurada. Config\u00farala en la secci\u00f3n B\u00f3veda.',
+    btnCancel: 'Cancelar', btnDownload: 'Descargar', btnAnalyze: 'Analizar', btnImport: 'Importar',
+    importModalTitle: 'Importar pool',
+    importModalHelp: 'Selecciona un archivo .bp exportado anteriormente.',
+    importPassphrasePlaceholder: 'Passphrase del archivo',
+    importNip44Help: 'Archivo cifrado NIP-44 \u2014 se requiere extensi\u00f3n NIP-07 (Alby/nos2x) para descifrar.',
+    importPassphraseMismatch: 'Las passphrases no coinciden',
+    importPassphraseShort: 'La passphrase debe tener al menos 8 caracteres',
+    importExportError: 'Error',
+    importNoTxs: 'El archivo no contiene transacciones activas para importar.',
+    importSummaryTpl: 'Se a\u00f1adir\u00e1n {add} tx \u00b7 {dup} duplicadas (ignoradas) \u00b7 {conf} con conflicto UTXO',
+    importConflictsTitle: '\u26a0 Conflictos detectados',
+    importConflictsNote: 'Fase 1 no permite resolver conflictos UTXO. Salta esas txs en otra exportaci\u00f3n o limpia el pool antes de importar.',
+    importNip44Needed: 'Necesitas instalar Alby o nos2x para descifrar este archivo.',
+    importDone: '{n} importadas, {s} saltadas',
+    exportInProgress: 'Generando archivo...',
     vaultNoNpub: 'Configura tu npub', vaultNoNpubDesc: 'Ve a Ajustes y pega tu npub para activar la b\u00f3veda cifrada',
     vaultNoExt: 'Extensi\u00f3n NIP-07 requerida', vaultNoExtDesc: 'Instala Alby o nos2x para descifrar la b\u00f3veda',
     vaultDecrypting: 'Descifrando...', vaultDecrypted: 'entradas descifradas',
@@ -154,13 +184,43 @@ const i18n = {
     subLiana: 'C. Faking blockheight (experimental)',
     lianaDesc: 'For wallets that do not let you configure nLockTime and set it themselves to the current block height, define the block offset you want to show. Designed for wallets like Liana, especially for scheduling cycling transactions over the next months or year:',
     lianaOffset: 'Offset', lianaIncrement: 'Advance',
-    lianaIncrementLabel: 'sec/block (0=no advance)',
-    lianaEnabled: 'Enable blockheight faking',
+    lianaIncrementLabel: 'per virtual block',
+    lianaDisableAt: 'Auto-disable',
+    lianaDisableAtTemplate: 'at block {n} ({k} blocks left)',
+    lianaDisableAtPassed: 'pending — will disable on next block',
+    lianaEnabled: 'Enable blockheight faking (auto-disables after 12 real blocks)',
+    lianaEnabledActive: 'Enable blockheight faking (auto-disables after 12 real blocks at {n})',
     priceDesc: 'Automatically broadcast transactions when the Bitcoin price crosses a threshold. Designed to send additional collateral to loan contracts and avoid liquidations:',
     priceEnabled: 'Enable price-based broadcast',
     priceSource: 'Source', priceNone: 'Select...', priceCustom: 'Local oracle',
     priceSchedule: 'Broadcast if BTC', priceBelow: 'drops below', priceAbove: 'rises above',
     priceExpiry: 'Expires', priceExpired: 'expired',
+    setTitleBackup: '5. Pool backup',
+    setBackupHelp: 'Export your active transactions (pending + scheduled) to an encrypted file so you don\'t lose them on restart or migration. Re-import them later without re-signing.',
+    poolExport: 'Export pool', poolImport: 'Import pool',
+    exportModalTitle: 'Export pool',
+    exportModalHelp: 'Choose how to encrypt the file. The export only includes active transactions (pending + scheduled).',
+    exportMethodPassphrase: 'Passphrase', exportMethodNip44: 'NIP-44 (your npub)',
+    exportPassphrasePlaceholder: 'Passphrase (min 8)',
+    exportPassphraseConfirmPlaceholder: 'Confirm passphrase',
+    exportPassphraseWarn: '⚠ If you lose the passphrase, the file is unrecoverable.',
+    exportNip44Help: 'Will be encrypted with the npub set in BP. To decrypt on import you\'ll need a NIP-07 extension (Alby, nos2x).',
+    exportNip44NoNpub: 'No npub configured. Set one in the Vault section.',
+    btnCancel: 'Cancel', btnDownload: 'Download', btnAnalyze: 'Analyze', btnImport: 'Import',
+    importModalTitle: 'Import pool',
+    importModalHelp: 'Pick a .bp file you exported before.',
+    importPassphrasePlaceholder: 'File passphrase',
+    importNip44Help: 'NIP-44 encrypted file — you need a NIP-07 extension (Alby/nos2x) to decrypt.',
+    importPassphraseMismatch: 'Passphrases do not match',
+    importPassphraseShort: 'Passphrase must be at least 8 characters',
+    importExportError: 'Error',
+    importNoTxs: 'The file contains no active transactions to import.',
+    importSummaryTpl: '{add} txs will be added · {dup} duplicates (ignored) · {conf} with UTXO conflict',
+    importConflictsTitle: '⚠ Conflicts detected',
+    importConflictsNote: 'Phase 1 cannot resolve UTXO conflicts. Skip those txs in another export or clean the pool before importing.',
+    importNip44Needed: 'You need to install Alby or nos2x to decrypt this file.',
+    importDone: '{n} imported, {s} skipped',
+    exportInProgress: 'Generating file...',
     vaultNoNpub: 'Set up your npub', vaultNoNpubDesc: 'Go to Settings and paste your npub to enable the encrypted vault',
     vaultNoExt: 'NIP-07 extension required', vaultNoExtDesc: 'Install Alby or nos2x to decrypt the vault',
     vaultDecrypting: 'Decrypting...', vaultDecrypted: 'entries decrypted',
@@ -211,6 +271,7 @@ function applyLang() {
   document.getElementById('set-upstream-desc').textContent = t('setUpstreamDesc');
   document.getElementById('set-title-vault').textContent = t('setVault');
   document.getElementById('set-title-prefs').textContent = t('setPrefs');
+  if (typeof applyExportImportI18n === 'function') applyExportImportI18n();
   document.getElementById('set-npub-help').textContent = t('setNpubHelp');
   document.getElementById('set-npub-help2').textContent = t('setNpubHelp2');
   document.getElementById('set-npub-warn').textContent = t('setNpubWarn');
@@ -227,6 +288,7 @@ function applyLang() {
   document.getElementById('set-lbl-liana-offset').textContent = t('lianaOffset');
   document.getElementById('set-lbl-liana-increment').textContent = t('lianaIncrement');
   document.getElementById('set-liana-increment-label').textContent = t('lianaIncrementLabel');
+  document.getElementById('set-lbl-liana-disable-at').textContent = t('lianaDisableAt');
   document.getElementById('set-lbl-liana-enabled').textContent = t('lianaEnabled');
   document.getElementById('set-sub-price').textContent = t('subPrice');
   document.getElementById('set-price-desc').textContent = t('priceDesc');
@@ -359,6 +421,12 @@ function updateStatus(s) {
     mtpEl.style.display = '';
     vhEl.style.display = 'none';
   }
+
+  // Live countdown on the Liana auto-disable line (Settings panel)
+  if (document.getElementById('set-liana-disable-at-row')) {
+    updateLianaDisableAtDisplay(s.liana_disable_at_height, s.current_height);
+  }
+  updateLianaEnabledLabel(s.liana_disable_at_height);
 
   // Price display (next to tabs)
   const priceEl = document.getElementById('price-display');
@@ -770,17 +838,41 @@ function locktimeLock(tx) {
   if (lt.type === 'block' && height && height >= lt.value) return '';
 
   const id = 'lock-' + tx.txid_full;
+  const isPending = tx.status === 'pending';
   const autoMsg = tx.status === 'scheduled'
     ? (lang === 'es' ? ' — auto programada por nLockTime' : ' — auto-scheduled by nLockTime')
     : '';
+  const clickMsg = isPending
+    ? (lang === 'es' ? '\nClick para programar a este nLockTime' : '\nClick to schedule at this nLockTime')
+    : '';
   let detail;
   if (lt.type === 'timestamp') {
-    detail = `nLockTime MTP: ${lt.date}${autoMsg}`;
+    detail = `nLockTime MTP: ${lt.date}${autoMsg}${clickMsg}`;
   } else {
-    detail = `nLockTime ${lang === 'es' ? 'bloque' : 'block'}: ${lt.value.toLocaleString()}${autoMsg}`;
+    detail = `nLockTime ${lang === 'es' ? 'bloque' : 'block'}: ${lt.value.toLocaleString()}${autoMsg}${clickMsg}`;
   }
 
-  return ` <span class="lock-icon" onclick="toggleTooltip(event,'${id}')">&#128274;<span class="lock-detail" id="${id}">${detail}</span></span>`;
+  const handler = isPending
+    ? `clickLockIcon('${tx.txid_full}', '${id}', event)`
+    : `toggleTooltip(event,'${id}')`;
+  const cursor = isPending ? 'pointer' : 'help';
+  return ` <span class="lock-icon" style="cursor:${cursor}" onclick="${handler}">&#128274;<span class="lock-detail" id="${id}">${detail}</span></span>`;
+}
+
+async function clickLockIcon(txid, tooltipId, event) {
+  // First show tooltip so the user has visual feedback while the request flies.
+  toggleTooltip(event, tooltipId);
+  try {
+    const resp = await fetch(`/api/txs/${txid}/auto-schedule-locktime`, { method: 'POST' });
+    const data = await resp.json();
+    if (!resp.ok) {
+      console.warn('auto-schedule-locktime failed:', data.error);
+      return;
+    }
+    refresh();
+  } catch (e) {
+    console.error('auto-schedule-locktime error:', e);
+  }
 }
 
 function dependencyTag(tx) {
@@ -1321,10 +1413,16 @@ async function loadSettingsTab() {
   document.getElementById('set-auto-locktime').checked = s.auto_schedule_locktime !== false;
   const lianaOffset = s.liana_height_offset || 0;
   const lianaRate = s.liana_increment_rate || 0;
+  const lianaDisableAt = s.liana_disable_at_height || 0;
   const lianaEnabled = lianaOffset > 0 || lianaRate > 0;
   document.getElementById('set-liana-enabled').checked = lianaEnabled;
   document.getElementById('set-liana-offset').value = lianaOffset;
-  document.getElementById('set-liana-increment').value = lianaRate;
+  // Slider min is 5: clamp displayed value (saved 0 means "paused"; show as 5 visually)
+  const rateForSlider = lianaRate >= 5 ? lianaRate : 10;
+  document.getElementById('set-liana-increment').value = rateForSlider;
+  updateLianaIncrementValue(rateForSlider);
+  updateLianaDisableAtDisplay(lianaDisableAt, currentStatus && currentStatus.current_height);
+  updateLianaEnabledLabel(lianaDisableAt);
   toggleLianaFake(lianaEnabled);
   updateLianaOffsetLabel(lianaOffset);
 
@@ -1685,6 +1783,40 @@ function saveLianaIncrement(val) {
   });
 }
 
+function updateLianaIncrementValue(val) {
+  const v = parseInt(val) || 0;
+  document.getElementById('set-liana-increment-value').textContent = v + 's';
+}
+
+function updateLianaEnabledLabel(disableAt) {
+  const el = document.getElementById('set-lbl-liana-enabled');
+  if (!el) return;
+  if (disableAt && disableAt > 0) {
+    el.textContent = t('lianaEnabledActive').replace('{n}', disableAt.toLocaleString());
+  } else {
+    el.textContent = t('lianaEnabled');
+  }
+}
+
+function updateLianaDisableAtDisplay(disableAt, currentHeight) {
+  const row = document.getElementById('set-liana-disable-at-row');
+  const label = document.getElementById('set-liana-disable-at-label');
+  if (!disableAt || disableAt <= 0) {
+    row.style.display = 'none';
+    return;
+  }
+  row.style.display = '';
+  const ch = currentHeight || 0;
+  const remaining = disableAt - ch;
+  if (remaining <= 0) {
+    label.textContent = t('lianaDisableAtPassed');
+  } else {
+    label.textContent = t('lianaDisableAtTemplate')
+      .replace('{n}', disableAt.toLocaleString())
+      .replace('{k}', remaining);
+  }
+}
+
 function toggleLianaFake(enabled) {
   const config = document.getElementById('liana-fake-config');
   const offsetInput = document.getElementById('set-liana-offset');
@@ -1699,9 +1831,11 @@ function toggleLianaFake(enabled) {
     config.style.pointerEvents = 'none';
     offsetInput.disabled = true;
     incrementInput.disabled = true;
-    // Reset to 0 when disabled
+    // Reset to 0 when disabled; backend will clear disable_at automatically
     offsetInput.value = 0;
-    incrementInput.value = 0;
+    incrementInput.value = 10;
+    updateLianaIncrementValue(10);
+    updateLianaDisableAtDisplay(0, 0);
     updateLianaOffsetLabel(0);
     saveLianaOffset(0);
     saveLianaIncrement(0);
@@ -1977,4 +2111,305 @@ function sortVaultBy(field) {
   if (vaultSort.field === field) vaultSort.asc = !vaultSort.asc;
   else { vaultSort.field = field; vaultSort.asc = true; }
   renderVaultTable();
+}
+
+// --- Pool export / import (Phase 1) ---
+
+let _importParsedFile = null;
+let _importDecryptedPayload = null;
+
+function openExportModal() {
+  document.getElementById('pool-modal-overlay').style.display = 'flex';
+  document.getElementById('pool-modal-export').style.display = '';
+  document.getElementById('pool-modal-import').style.display = 'none';
+  document.getElementById('export-modal-error').style.display = 'none';
+  document.getElementById('export-passphrase').value = '';
+  document.getElementById('export-passphrase-confirm').value = '';
+  document.querySelector('input[name="export-method"][value="passphrase"]').checked = true;
+  updateExportMethod();
+  applyExportImportI18n();
+  // Populate the npub display for NIP-44 method
+  const npub = currentStatus && currentStatus.npub || (document.getElementById('set-npub') ? document.getElementById('set-npub').value : '');
+  document.getElementById('export-nip44-npub').textContent = npub || '';
+}
+
+function openImportModal() {
+  document.getElementById('pool-modal-overlay').style.display = 'flex';
+  document.getElementById('pool-modal-export').style.display = 'none';
+  document.getElementById('pool-modal-import').style.display = '';
+  document.getElementById('import-modal-error').style.display = 'none';
+  document.getElementById('import-step-pick').style.display = '';
+  document.getElementById('import-step-review').style.display = 'none';
+  document.getElementById('import-file').value = '';
+  document.getElementById('import-passphrase').value = '';
+  document.getElementById('import-passphrase-row').style.display = 'none';
+  document.getElementById('import-nip44-row').style.display = 'none';
+  document.getElementById('import-plan-submit').disabled = true;
+  _importParsedFile = null;
+  _importDecryptedPayload = null;
+  applyExportImportI18n();
+}
+
+function closePoolModal(e) {
+  if (e && e.target && e.target.id !== 'pool-modal-overlay') return;
+  // Wipe passphrase fields BEFORE hiding the modal — Chrome only offers to save
+  // credentials when a password field has a value at the moment its container
+  // disappears. Emptying first silences the prompt.
+  ['export-passphrase', 'export-passphrase-confirm', 'import-passphrase'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.value = '';
+  });
+  document.getElementById('pool-modal-overlay').style.display = 'none';
+}
+
+function applyExportImportI18n() {
+  const setText = (id, key) => { const el = document.getElementById(id); if (el) el.textContent = t(key); };
+  setText('set-title-backup', 'setTitleBackup');
+  setText('set-backup-help', 'setBackupHelp');
+  setText('btn-pool-export', 'poolExport');
+  setText('btn-pool-import', 'poolImport');
+  setText('export-modal-title', 'exportModalTitle');
+  setText('export-modal-help', 'exportModalHelp');
+  setText('export-method-passphrase', 'exportMethodPassphrase');
+  setText('export-method-nip44', 'exportMethodNip44');
+  setText('export-passphrase-warn', 'exportPassphraseWarn');
+  setText('export-nip44-help', 'exportNip44Help');
+  setText('export-modal-cancel', 'btnCancel');
+  setText('export-modal-submit', 'btnDownload');
+  document.getElementById('export-passphrase').placeholder = t('exportPassphrasePlaceholder');
+  document.getElementById('export-passphrase-confirm').placeholder = t('exportPassphraseConfirmPlaceholder');
+  setText('import-modal-title', 'importModalTitle');
+  setText('import-modal-help', 'importModalHelp');
+  setText('import-nip44-help', 'importNip44Help');
+  setText('import-modal-cancel', 'btnCancel');
+  setText('import-plan-submit', 'btnAnalyze');
+  setText('import-review-cancel', 'btnCancel');
+  setText('import-apply-submit', 'btnImport');
+  setText('import-conflicts-title', 'importConflictsTitle');
+  setText('import-conflicts-note', 'importConflictsNote');
+  document.getElementById('import-passphrase').placeholder = t('importPassphrasePlaceholder');
+}
+
+function updateExportMethod() {
+  const method = document.querySelector('input[name="export-method"]:checked').value;
+  document.getElementById('export-passphrase-fields').style.display = method === 'passphrase' ? '' : 'none';
+  document.getElementById('export-nip44-fields').style.display = method === 'nip44' ? '' : 'none';
+}
+
+function _showExportError(msg) {
+  const el = document.getElementById('export-modal-error');
+  el.textContent = msg;
+  el.style.display = '';
+}
+
+async function doExport() {
+  const method = document.querySelector('input[name="export-method"]:checked').value;
+  document.getElementById('export-modal-error').style.display = 'none';
+  const submitBtn = document.getElementById('export-modal-submit');
+  submitBtn.disabled = true;
+  const originalText = submitBtn.textContent;
+  submitBtn.textContent = t('exportInProgress');
+
+  let body = { method };
+  if (method === 'passphrase') {
+    const p1 = document.getElementById('export-passphrase').value;
+    const p2 = document.getElementById('export-passphrase-confirm').value;
+    if (p1.length < 8) {
+      _showExportError(t('importPassphraseShort'));
+      submitBtn.disabled = false; submitBtn.textContent = originalText; return;
+    }
+    if (p1 !== p2) {
+      _showExportError(t('importPassphraseMismatch'));
+      submitBtn.disabled = false; submitBtn.textContent = originalText; return;
+    }
+    body.passphrase = p1;
+    // Clear DOM inputs immediately so the password manager doesn't snapshot them
+    document.getElementById('export-passphrase').value = '';
+    document.getElementById('export-passphrase-confirm').value = '';
+  }
+
+  try {
+    const resp = await fetch('/api/pool/export', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    if (!resp.ok) {
+      const data = await resp.json().catch(() => ({ error: 'export failed' }));
+      _showExportError(data.error || ('HTTP ' + resp.status));
+      return;
+    }
+    const blob = await resp.blob();
+    const disposition = resp.headers.get('Content-Disposition') || '';
+    const match = disposition.match(/filename="?([^"]+)"?/);
+    const filename = match ? match[1] : 'broadcast-pool-export.bp';
+    const txCount = resp.headers.get('X-Tx-Count') || '?';
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = filename;
+    document.body.appendChild(a); a.click(); a.remove();
+    URL.revokeObjectURL(url);
+    document.getElementById('pool-backup-status').textContent =
+      (lang === 'es' ? 'Exportadas ' : 'Exported ') + txCount + ' tx';
+    closePoolModal();
+  } catch (e) {
+    _showExportError(String(e));
+  } finally {
+    submitBtn.disabled = false; submitBtn.textContent = originalText;
+  }
+}
+
+async function onImportFileChosen(input) {
+  document.getElementById('import-modal-error').style.display = 'none';
+  document.getElementById('import-plan-submit').disabled = true;
+  const file = input.files && input.files[0];
+  if (!file) return;
+  try {
+    const text = await file.text();
+    const parsed = JSON.parse(text);
+    if (parsed.version !== 1 || !parsed.encryption || !parsed.ciphertext) {
+      throw new Error('not a valid BP export file');
+    }
+    _importParsedFile = parsed;
+    if (parsed.encryption === 'passphrase') {
+      document.getElementById('import-passphrase-row').style.display = '';
+      document.getElementById('import-nip44-row').style.display = 'none';
+    } else if (parsed.encryption === 'nip44') {
+      document.getElementById('import-passphrase-row').style.display = 'none';
+      document.getElementById('import-nip44-row').style.display = '';
+      if (!window.nostr || !window.nostr.nip44) {
+        _showImportError(t('importNip44Needed'));
+        return;
+      }
+    } else {
+      throw new Error('unsupported encryption: ' + parsed.encryption);
+    }
+    document.getElementById('import-plan-submit').disabled = false;
+  } catch (e) {
+    _showImportError(t('importExportError') + ': ' + e.message);
+  }
+}
+
+function _showImportError(msg) {
+  const el = document.getElementById('import-modal-error');
+  el.textContent = msg;
+  el.style.display = '';
+}
+
+async function doImportPlan() {
+  document.getElementById('import-modal-error').style.display = 'none';
+  if (!_importParsedFile) return;
+  const submitBtn = document.getElementById('import-plan-submit');
+  submitBtn.disabled = true;
+
+  try {
+    let body;
+    if (_importParsedFile.encryption === 'nip44') {
+      const ephem = (_importParsedFile.encryption_meta || {}).ephem_pubkey;
+      const plaintext = await window.nostr.nip44.decrypt(ephem, _importParsedFile.ciphertext);
+      _importDecryptedPayload = JSON.parse(plaintext);
+      body = { decrypted_payload: _importDecryptedPayload };
+    } else {
+      const pass = document.getElementById('import-passphrase').value;
+      if (!pass) { _showImportError(t('importPassphraseShort')); submitBtn.disabled = false; return; }
+      body = { file: _importParsedFile, passphrase: pass };
+      // Clear the DOM input right away to prevent the password manager snapshot
+      document.getElementById('import-passphrase').value = '';
+    }
+
+    const resp = await fetch('/api/pool/import-plan', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    const data = await resp.json();
+    if (!resp.ok) {
+      _showImportError(data.error || ('HTTP ' + resp.status));
+      submitBtn.disabled = false;
+      return;
+    }
+    _renderImportSummary(data, body);
+  } catch (e) {
+    _showImportError(String(e));
+    submitBtn.disabled = false;
+  }
+}
+
+function _renderImportSummary(plan, planBody) {
+  document.getElementById('import-step-pick').style.display = 'none';
+  document.getElementById('import-step-review').style.display = '';
+
+  const addN = (plan.to_add || []).length;
+  const dupN = (plan.duplicates || []).length;
+  const confN = (plan.conflicts || []).length;
+
+  document.getElementById('import-summary').textContent = t('importSummaryTpl')
+    .replace('{add}', addN).replace('{dup}', dupN).replace('{conf}', confN);
+
+  const conflictsBlock = document.getElementById('import-conflicts-block');
+  const conflictsList = document.getElementById('import-conflicts-list');
+  if (confN > 0) {
+    conflictsBlock.style.display = '';
+    conflictsList.innerHTML = plan.conflicts.map(c =>
+      `→ ${c.imported_txid.slice(0,16)}... ↔ ${c.existing_txids.map(t => t.slice(0,12)+'...').join(', ')}`
+    ).join('<br>');
+    document.getElementById('import-apply-submit').disabled = (addN === 0);
+  } else {
+    conflictsBlock.style.display = 'none';
+    document.getElementById('import-apply-submit').disabled = (addN === 0);
+  }
+  // Stash the body so apply can reuse it (no need to re-decrypt)
+  document.getElementById('import-apply-submit').dataset.planBody = JSON.stringify(planBody);
+}
+
+async function doImportApply() {
+  document.getElementById('import-modal-error').style.display = 'none';
+  const submitBtn = document.getElementById('import-apply-submit');
+  submitBtn.disabled = true;
+  try {
+    const planBody = JSON.parse(submitBtn.dataset.planBody || '{}');
+    // Phase 1: skip every conflicting tx automatically (no wizard yet)
+    planBody.resolutions = {};
+    // We don't know which were conflicts here without re-running plan; the server
+    // will refuse and tell us if any blocking conflict remains. The simpler path:
+    // ask for "skip-all-conflicts" by re-running plan on the server and marking them.
+    // To keep it minimal, just call apply and let the server enforce.
+    const resp = await fetch('/api/pool/import-apply', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(planBody),
+    });
+    const data = await resp.json();
+    if (!resp.ok) {
+      if (data.error === 'utxo_conflicts') {
+        // Re-call with skip resolutions for every conflict
+        const skipRes = {};
+        for (const c of (data.conflicts || [])) skipRes[c.imported_txid] = 'skip';
+        planBody.resolutions = skipRes;
+        const resp2 = await fetch('/api/pool/import-apply', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(planBody),
+        });
+        const data2 = await resp2.json();
+        if (!resp2.ok) { _showImportError(data2.error || 'apply failed'); submitBtn.disabled = false; return; }
+        _finishImport(data2);
+        return;
+      }
+      _showImportError(data.error || ('HTTP ' + resp.status));
+      submitBtn.disabled = false;
+      return;
+    }
+    _finishImport(data);
+  } catch (e) {
+    _showImportError(String(e));
+    submitBtn.disabled = false;
+  }
+}
+
+function _finishImport(result) {
+  const msg = t('importDone').replace('{n}', result.added || 0).replace('{s}', result.skipped || 0);
+  document.getElementById('pool-backup-status').textContent = msg;
+  closePoolModal();
+  refresh();
 }

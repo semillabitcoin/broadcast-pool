@@ -37,12 +37,13 @@ class ElectrumSession:
         self._pending_methods: dict[int, tuple[str, list]] = {}
         self._closed = False
 
-        # Liana height-offset state (PoC: fake future block height)
+        # Liana height-offset state (PoC: fake future block height).
+        # Auto-increment is driven globally by Scheduler._liana_increment_loop;
+        # this session just maintains the local fake chain that mirrors the global offset.
         self._liana_offset: int = 0  # 0 = disabled
         self._real_tip_height: int | None = None
         self._real_tip_header: str | None = None
         self._fake_chain: list[bytes] = []  # cached fake headers
-        self._liana_increment_task: asyncio.Task | None = None
 
         peer = client_writer.get_extra_info("peername")
         self.peer_str = f"{peer[0]}:{peer[1]}" if peer else "unknown"
@@ -142,7 +143,7 @@ class ElectrumSession:
             return 0
 
     def _rebuild_fake_chain(self, real_tip_height: int, real_tip_header_hex: str) -> None:
-        """Generate fake header chain from current real tip."""
+        """Generate fake header chain from current real tip, sized to the current global offset."""
         from src.proxy.header_faker import generate_fake_chain
         self._real_tip_height = real_tip_height
         self._real_tip_header = real_tip_header_hex
@@ -156,54 +157,48 @@ class ElectrumSession:
                 real_tip_height,
                 self._liana_offset,
             )
-            # Start auto-increment task if configured
-            rate_raw = self.store.get_state("liana_increment_rate") or "0"
-            try:
-                rate = int(rate_raw)
-            except ValueError:
-                rate = 0
-            if self._liana_increment_task:
-                self._liana_increment_task.cancel()
-                self._liana_increment_task = None
-            if rate > 0:
-                self._liana_increment_task = asyncio.create_task(self._auto_increment_loop(rate))
         else:
             self._fake_chain = []
 
-    async def _auto_increment_loop(self, rate_seconds: int) -> None:
-        """Periodically extend fake chain by 1 block and notify Liana."""
+    async def advance_fake_chain(self) -> bool:
+        """Extend the fake chain by 1 header and push a headers.subscribe notification.
+
+        Called by the global Scheduler tick (one source of truth for all sessions).
+        Returns True if this session advanced, False if it has no active fake chain or isn't Liana.
+        """
+        if self._closed or not self._fake_chain or self._real_tip_height is None:
+            return False
+        if not self._is_liana():
+            return False
+
         from src.proxy.header_faker import sha256d, build_header, parse_header
+        last = self._fake_chain[-1]
+        last_parsed = parse_header(last.hex())
+        new_header = build_header(
+            version=4,
+            prev_hash=sha256d(last),
+            merkle_root=b"\x00" * 32,
+            time=last_parsed["time"] + 600,
+            bits=last_parsed["bits"],
+            nonce=0,
+        )
+        self._fake_chain.append(new_header)
+        # Mirror chain length as local offset; store value is owned by the scheduler tick.
+        self._liana_offset = len(self._fake_chain)
+        new_tip_height = self._real_tip_height + self._liana_offset
+
+        notif = {
+            "jsonrpc": "2.0",
+            "method": "blockchain.headers.subscribe",
+            "params": [{"height": new_tip_height, "hex": new_header.hex()}],
+        }
         try:
-            while not self._closed and self._fake_chain:
-                await asyncio.sleep(rate_seconds)
-                if not self._fake_chain or self._real_tip_height is None:
-                    break
-                # Build new fake header chaining from last
-                last = self._fake_chain[-1]
-                last_parsed = parse_header(last.hex())
-                new_header = build_header(
-                    version=4,
-                    prev_hash=sha256d(last),
-                    merkle_root=b"\x00" * 32,
-                    time=last_parsed["time"] + 600,
-                    bits=last_parsed["bits"],
-                    nonce=0,
-                )
-                self._fake_chain.append(new_header)
-                self._liana_offset += 1
-                new_tip_height = self._real_tip_height + self._liana_offset
-                # Push notification to Liana
-                notif = {
-                    "jsonrpc": "2.0",
-                    "method": "blockchain.headers.subscribe",
-                    "params": [{"height": new_tip_height, "hex": new_header.hex()}],
-                }
-                await self.send_to_client(notif)
-                log.debug("[%s] Auto-advanced fake tip to %d", self.peer_str, new_tip_height)
-        except asyncio.CancelledError:
-            pass
+            await self.send_to_client(notif)
         except Exception as e:
-            log.warning("[%s] Auto-increment error: %s", self.peer_str, e)
+            log.warning("[%s] Failed to push fake header: %s", self.peer_str, e)
+            return False
+        log.debug("[%s] Advanced fake tip to %d", self.peer_str, new_tip_height)
+        return True
 
     def _fake_header_at(self, height: int) -> str | None:
         """Return fake header hex for a height in the offset range, or None."""
@@ -517,9 +512,6 @@ class ElectrumSession:
         if self._closed:
             return
         self._closed = True
-
-        if self._liana_increment_task:
-            self._liana_increment_task.cancel()
 
         pending_count = len(self._pending_methods)
         if pending_count:

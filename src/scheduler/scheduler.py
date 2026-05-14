@@ -21,19 +21,24 @@ log = logging.getLogger(__name__)
 class Scheduler:
     """Watches for new blocks and broadcasts scheduled transactions."""
 
-    def __init__(self, store: TxStore, notify_callback=None):
+    def __init__(self, store: TxStore, notify_callback=None, proxy_server=None):
         self.store = store
         self.notify_callback = notify_callback  # async fn(set[str]) to notify sessions
+        # ProxyServer reference: needed to push fake-block notifications to Liana sessions
+        self.proxy_server = proxy_server
         self._upstream: UpstreamConnection | None = None
         self._running = False
         self._reconnect_event = asyncio.Event()
         self._price_task: asyncio.Task | None = None
+        self._liana_increment_task: asyncio.Task | None = None
         self._current_price: float | None = None
 
     async def start(self) -> None:
         self._running = True
         # Price poller runs independently of upstream connection
         self._price_task = asyncio.create_task(self._price_poller())
+        # Global Liana fake-block-height increment loop (single source of truth)
+        self._liana_increment_task = asyncio.create_task(self._liana_increment_loop())
         backoff = 1
         while self._running:
             try:
@@ -50,6 +55,8 @@ class Scheduler:
         self._running = False
         if self._price_task:
             self._price_task.cancel()
+        if self._liana_increment_task:
+            self._liana_increment_task.cancel()
         if self._upstream:
             await self._upstream.close()
 
@@ -164,6 +171,18 @@ class Scheduler:
         if mtp:
             self.store.set_state("current_mtp", str(mtp))
 
+        # Auto-disable Liana faking if real chain reached the configured cutoff.
+        # Clears offset, rate, and the cutoff itself (one-shot).
+        try:
+            disable_at = int(self.store.get_state("liana_disable_at_height") or "0")
+        except ValueError:
+            disable_at = 0
+        if disable_at > 0 and height >= disable_at:
+            self.store.set_state("liana_height_offset", "0")
+            self.store.set_state("liana_increment_rate", "0")
+            self.store.set_state("liana_disable_at_height", "0")
+            log.info("Liana faking auto-disabled: real height %d reached cutoff %d", height, disable_at)
+
         # Broadcast due transactions (by block height)
         due_txs = self.store.get_due_txs(height)
         for tx in due_txs:
@@ -198,6 +217,53 @@ class Scheduler:
             purged = self.store.purge_confirmed(height, config.PURGE_AFTER_BLOCKS)
             if purged:
                 log.info("Purged %d confirmed tx(s) at depth %d+", purged, config.PURGE_AFTER_BLOCKS)
+
+    async def _liana_increment_loop(self) -> None:
+        """Advance the global Liana fake block height once every `liana_increment_rate` seconds.
+
+        Single source of truth for the offset progression: persists to store and asks the proxy
+        to extend every Liana session's fake chain so all connected wallets see the same tip.
+        Idle when faking is disabled (offset=0) or rate is 0.
+        """
+        IDLE_SECONDS = 5
+        CAP = 70000  # ~15 months, matches Session._load_liana_offset bounds
+        while self._running:
+            try:
+                rate_raw = self.store.get_state("liana_increment_rate") or "0"
+                offset_raw = self.store.get_state("liana_height_offset") or "0"
+                try:
+                    rate = int(rate_raw)
+                    offset = int(offset_raw)
+                except ValueError:
+                    rate = 0
+                    offset = 0
+
+                if rate <= 0 or offset <= 0 or offset >= CAP:
+                    await asyncio.sleep(IDLE_SECONDS)
+                    continue
+
+                await asyncio.sleep(rate)
+
+                # Re-read in case the user reset offset/rate during sleep
+                try:
+                    offset = int(self.store.get_state("liana_height_offset") or "0")
+                    rate_now = int(self.store.get_state("liana_increment_rate") or "0")
+                except ValueError:
+                    continue
+                if rate_now <= 0 or offset <= 0 or offset >= CAP:
+                    continue
+
+                new_offset = offset + 1
+                self.store.set_state("liana_height_offset", str(new_offset))
+
+                if self.proxy_server:
+                    advanced = await self.proxy_server.extend_all_liana_chains()
+                    log.debug("Liana tick → offset=%d, advanced %d session(s)", new_offset, advanced)
+            except asyncio.CancelledError:
+                break
+            except Exception as e:
+                log.warning("Liana increment loop error: %s", e)
+                await asyncio.sleep(IDLE_SECONDS)
 
     async def _price_poller(self) -> None:
         """Poll price source every 30s and store current price."""

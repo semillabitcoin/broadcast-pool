@@ -43,7 +43,7 @@ async def main():
 
     # Create components
     proxy = ProxyServer(store)
-    scheduler = Scheduler(store, notify_callback=proxy.notify_all_sessions)
+    scheduler = Scheduler(store, notify_callback=proxy.notify_all_sessions, proxy_server=proxy)
     web_app = create_app(store, proxy_server=proxy, scheduler=scheduler)
 
     # Start proxy

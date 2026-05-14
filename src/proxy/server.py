@@ -49,6 +49,17 @@ class ProxyServer:
         for session in list(self.sessions):
             await session._notify_subscriptions(scripthashes)
 
+    async def extend_all_liana_chains(self) -> int:
+        """Ask every Liana session to extend its fake chain by 1 header and push to its wallet.
+
+        Returns the number of sessions that successfully advanced.
+        """
+        count = 0
+        for session in list(self.sessions):
+            if await session.advance_fake_chain():
+                count += 1
+        return count
+
     async def _handle_connection(
         self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter
     ) -> None:

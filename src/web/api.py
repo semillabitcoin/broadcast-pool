@@ -4,6 +4,7 @@ import asyncio
 import json
 import logging
 import os
+from datetime import datetime
 
 from aiohttp import web
 
@@ -72,6 +73,7 @@ def create_app(store: TxStore, proxy_server=None, scheduler=None) -> web.Applica
     app.router.add_delete("/api/txs/{txid}", handle_delete)
     app.router.add_post("/api/txs/{txid}/reorder", handle_reorder)
     app.router.add_post("/api/txs/{txid}/schedule-mtp", handle_schedule_mtp)
+    app.router.add_post("/api/txs/{txid}/auto-schedule-locktime", handle_auto_schedule_locktime)
     app.router.add_post("/api/txs/{txid}/unschedule", handle_unschedule)
     app.router.add_post("/api/txs/{txid}/retry", handle_retry)
     app.router.add_post("/api/txs/auto-assign", handle_auto_assign)
@@ -92,6 +94,9 @@ def create_app(store: TxStore, proxy_server=None, scheduler=None) -> web.Applica
     app.router.add_post("/api/vault/clear", handle_vault_clear)
     app.router.add_get("/api/conflicts", handle_conflicts)
     app.router.add_get("/api/widget/stats", handle_widget_stats)
+    app.router.add_post("/api/pool/export", handle_pool_export)
+    app.router.add_post("/api/pool/import-plan", handle_pool_import_plan)
+    app.router.add_post("/api/pool/import-apply", handle_pool_import_apply)
 
     # Static files (frontend)
     app.router.add_get("/", handle_index)
@@ -123,6 +128,38 @@ def _classify_tx(tx) -> list[str]:
         tags.append("pago")
 
     return tags if tags else []
+
+
+LOCKTIME_TIMESTAMP_THRESHOLD = 500_000_000  # nLockTime >= this is a unix timestamp
+
+
+def _auto_schedule_by_locktime(store: TxStore, txid: str) -> dict:
+    """Schedule a tx according to its nLockTime, if it represents a real future lock.
+
+    Skips Sparrow-style anti-fee-sniping (locktime ~ current height). Used by both
+    handle_import_tx and the pool import flow, and by the user clicking the lock icon.
+    """
+    tx = store.get_tx(txid)
+    if not tx:
+        return {"scheduled": False, "reason": "not found"}
+    if tx.status != "pending":
+        return {"scheduled": False, "reason": f"status is '{tx.status}', not pending"}
+
+    locktime = tx.locktime or 0
+    if locktime <= 0:
+        return {"scheduled": False, "reason": "no locktime"}
+
+    if locktime >= LOCKTIME_TIMESTAMP_THRESHOLD:
+        # Timestamp locktime → scheduler's MTP loop will broadcast when MTP > locktime
+        store.update_status(txid, "scheduled")
+        return {"scheduled": True, "type": "timestamp", "value": locktime}
+
+    current_height = store.get_current_height() or 0
+    if locktime > max(current_height, 1) + 1:
+        store.update_target_block(txid, locktime)
+        return {"scheduled": True, "type": "block", "value": locktime, "target_block": locktime}
+
+    return {"scheduled": False, "reason": "locktime not in future"}
 
 
 def _tx_to_dict(tx, current_height: int = 0, store: TxStore = None) -> dict:
@@ -298,6 +335,27 @@ async def handle_schedule_mtp(request: web.Request) -> web.Response:
     })
 
 
+async def handle_auto_schedule_locktime(request: web.Request) -> web.Response:
+    """Schedule a pending tx according to its own nLockTime. Used by the lock-icon click."""
+    store: TxStore = request.app["store"]
+    txid = request.match_info["txid"]
+
+    tx = store.get_tx(txid)
+    if not tx:
+        return web.json_response({"error": "Not found"}, status=404)
+    if tx.status != "pending":
+        return web.json_response(
+            {"error": f"Cannot auto-schedule tx in status '{tx.status}'"}, status=400
+        )
+
+    result = _auto_schedule_by_locktime(store, txid)
+    if not result.get("scheduled"):
+        return web.json_response(
+            {"error": result.get("reason", "cannot auto-schedule")}, status=400
+        )
+    return web.json_response({"ok": True, **result})
+
+
 async def handle_unschedule(request: web.Request) -> web.Response:
     """Revert a scheduled tx back to pending."""
     store: TxStore = request.app["store"]
@@ -466,16 +524,8 @@ async def handle_import_tx(request: web.Request) -> web.Response:
                 pass
 
     # Auto-schedule if locktime is in the future
-    auto_lock = store.get_state("auto_schedule_locktime") != "false"
-    if auto_lock:
-        current_height = store.get_current_height()
-        if parsed.locktime >= 500_000_000:
-            # Timestamp locktime — mark as scheduled for MTP
-            store.update_status(parsed.txid, "scheduled")
-        elif (0 < parsed.locktime < 500_000_000
-                and parsed.locktime > max(current_height, 1) + 1):
-            # Block locktime in the future — auto-schedule
-            store.update_target_block(parsed.txid, parsed.locktime)
+    if store.get_state("auto_schedule_locktime") != "false":
+        _auto_schedule_by_locktime(store, parsed.txid)
 
     # Resolve inputs async via scheduler's upstream (fee, coin age, scripthashes)
     scheduler = request.app.get("scheduler")
@@ -616,6 +666,7 @@ async def handle_status(request: web.Request) -> web.Response:
         "current_price": float(store.get_state("current_price") or 0) or None,
         "price_source": store.get_state("price_source") or "",
         "liana_height_offset": int(store.get_state("liana_height_offset") or "0"),
+        "liana_disable_at_height": int(store.get_state("liana_disable_at_height") or "0"),
     }
     return web.json_response(data)
 
@@ -634,6 +685,7 @@ async def handle_get_settings(request: web.Request) -> web.Response:
         "price_enabled": bool(store.get_state("price_source")),
         "liana_height_offset": int(store.get_state("liana_height_offset") or "0"),
         "liana_increment_rate": int(store.get_state("liana_increment_rate") or "0"),
+        "liana_disable_at_height": int(store.get_state("liana_disable_at_height") or "0"),
     })
 
 
@@ -887,6 +939,10 @@ async def handle_set_preferences(request: web.Request) -> web.Response:
         if not source:
             store.set_state("current_price", "")
 
+    # Hard cap: the faker can only run for LIANA_FAKER_MAX_BLOCKS real blocks total.
+    # Use case is signing future-locktime cycling txs (<2h). Not editable by the user.
+    LIANA_FAKER_MAX_BLOCKS = 12
+
     if "liana_height_offset" in body:
         try:
             offset = int(body["liana_height_offset"])
@@ -896,15 +952,29 @@ async def handle_set_preferences(request: web.Request) -> web.Response:
                     status=400,
                 )
             store.set_state("liana_height_offset", str(offset))
+            if offset > 0:
+                # Set the 12-block cutoff on first activation; preserve existing countdown
+                # if the user is just tweaking the offset value mid-run.
+                existing_cutoff = int(store.get_state("liana_disable_at_height") or "0")
+                if existing_cutoff <= 0:
+                    current = store.get_current_height() or 0
+                    if current > 0:
+                        store.set_state(
+                            "liana_disable_at_height", str(current + LIANA_FAKER_MAX_BLOCKS)
+                        )
+            else:
+                # Offset cleared → clear the cutoff too (next activation starts fresh)
+                store.set_state("liana_disable_at_height", "0")
         except (ValueError, TypeError):
             return web.json_response({"error": "liana_height_offset must be an integer"}, status=400)
 
     if "liana_increment_rate" in body:
         try:
             rate = int(body["liana_increment_rate"])
-            if rate < 0 or rate > 60:
+            # Allow 0 (paused) or 5-60 in steps of 5 (UI uses a stepped slider)
+            if rate != 0 and (rate < 5 or rate > 60 or rate % 5 != 0):
                 return web.json_response(
-                    {"error": "liana_increment_rate must be 0-60 seconds"},
+                    {"error": "liana_increment_rate must be 0 or 5-60 seconds in steps of 5"},
                     status=400,
                 )
             store.set_state("liana_increment_rate", str(rate))
@@ -1050,6 +1120,338 @@ async def handle_widget_stats(request: web.Request) -> web.Response:
             {"title": "Altura", "text": f"{height:,}", "subtext": "actual"},
             {"title": "Conexiones", "text": str(connections), "subtext": "wallets"},
         ],
+    })
+
+
+# --- Pool export / import (Phase 1: no conflict wizard) ---
+
+async def handle_pool_export(request: web.Request) -> web.Response:
+    """Export active retained txs (pending + scheduled) as an encrypted .bp file.
+
+    Body: { method: "passphrase" | "nip44", passphrase?: "...", npub?: "..." }
+    Returns: application/octet-stream with the .bp file content.
+    """
+    from src.pool import export as pool_export
+
+    store: TxStore = request.app["store"]
+    try:
+        body = await request.json()
+    except Exception:
+        return web.json_response({"error": "Invalid JSON"}, status=400)
+
+    method = body.get("method", "")
+    if method not in ("passphrase", "nip44"):
+        return web.json_response({"error": "method must be 'passphrase' or 'nip44'"}, status=400)
+
+    txs = [
+        *store.get_all_txs(status="pending"),
+        *store.get_all_txs(status="scheduled"),
+    ]
+    txs_data: list[dict] = []
+    for tx in txs:
+        raw = store.get_raw_hex(tx.txid)
+        if not raw or raw.startswith("["):
+            log.warning("Skipping tx %s from export: cannot decrypt raw_hex", tx.txid[:16])
+            continue
+        # Collect inputs (precomputed in DB) so the import side can detect conflicts
+        # without re-parsing — server will still verify by re-parsing on import-plan.
+        inputs = [
+            {"prev_txid": inp.prev_txid, "prev_vout": inp.prev_vout}
+            for inp in store.get_inputs(tx.txid)
+        ]
+        txs_data.append({
+            "txid": tx.txid,
+            "raw_hex": raw,
+            "target_block": tx.target_block,
+            "target_price": tx.target_price,
+            "price_direction": tx.price_direction,
+            "expires_at": tx.expires_at,
+            "depends_on": tx.depends_on,
+            "wallet_label": tx.wallet_label,
+            "locktime": tx.locktime,
+            "created_at": tx.created_at,
+            "inputs": inputs,
+        })
+
+    payload = pool_export.build_payload(txs_data, store.network)
+
+    try:
+        if method == "passphrase":
+            passphrase = body.get("passphrase", "")
+            if not isinstance(passphrase, str) or len(passphrase) < 8:
+                return web.json_response(
+                    {"error": "passphrase must be at least 8 characters"}, status=400
+                )
+            enc_block = pool_export.encrypt_passphrase(payload, passphrase)
+        else:
+            npub = (body.get("npub") or store.get_state("npub") or "").strip()
+            if not npub:
+                return web.json_response(
+                    {"error": "npub required for NIP-44 export (set one in Settings)"},
+                    status=400,
+                )
+            enc_block = pool_export.encrypt_nip44(payload, npub)
+    except ValueError as e:
+        return web.json_response({"error": str(e)}, status=400)
+    except Exception as e:
+        log.error("Export encryption failed: %s", e, exc_info=True)
+        return web.json_response({"error": "Encryption failed"}, status=500)
+
+    file_obj = pool_export.wrap_file(store.network, enc_block)
+    body_bytes = json.dumps(file_obj, ensure_ascii=False, indent=2).encode("utf-8")
+    today = datetime.utcnow().strftime("%Y-%m-%d")
+    filename = f"broadcast-pool-export-{store.network}-{today}.bp"
+    return web.Response(
+        body=body_bytes,
+        headers={
+            "Content-Type": "application/octet-stream",
+            "Content-Disposition": f'attachment; filename="{filename}"',
+            "X-Tx-Count": str(len(txs_data)),
+        },
+    )
+
+
+def _validate_import_payload(payload: dict, store: TxStore) -> tuple[list[dict], str | None]:
+    """Validate the cleartext payload. Returns (txs_list, error)."""
+    if not isinstance(payload, dict):
+        return [], "payload must be a JSON object"
+    if payload.get("version") != 1:
+        return [], f"unsupported export version: {payload.get('version')}"
+    if payload.get("network") and payload["network"] != store.network:
+        return [], (
+            f"network mismatch: export is for '{payload.get('network')}' "
+            f"but this instance is on '{store.network}'"
+        )
+    txs = payload.get("txs")
+    if not isinstance(txs, list):
+        return [], "payload.txs must be a list"
+    return txs, None
+
+
+async def _decrypt_request(body: dict) -> tuple[dict | None, web.Response | None]:
+    """Resolve the body into a cleartext payload dict.
+
+    Body shapes:
+    - { decrypted_payload: {...} }                       — used by NIP-44 (browser decrypted)
+    - { file: {...}, method: "passphrase", passphrase }  — server decrypts AES-GCM
+    """
+    from src.pool import export as pool_export
+
+    if "decrypted_payload" in body:
+        return body["decrypted_payload"], None
+
+    file_obj = body.get("file")
+    if not isinstance(file_obj, dict):
+        return None, web.json_response(
+            {"error": "Provide either 'decrypted_payload' or 'file'+'passphrase'"},
+            status=400,
+        )
+    method = file_obj.get("encryption", "")
+    if method == "passphrase":
+        passphrase = body.get("passphrase", "")
+        if not isinstance(passphrase, str) or not passphrase:
+            return None, web.json_response({"error": "passphrase required"}, status=400)
+        try:
+            return pool_export.decrypt_passphrase(file_obj, passphrase), None
+        except ValueError as e:
+            return None, web.json_response({"error": str(e)}, status=400)
+    if method == "nip44":
+        return None, web.json_response(
+            {"error": "NIP-44 files must be decrypted in the browser; send 'decrypted_payload'"},
+            status=400,
+        )
+    return None, web.json_response({"error": f"Unknown encryption: {method}"}, status=400)
+
+
+async def handle_pool_import_plan(request: web.Request) -> web.Response:
+    """Analyze an import file: classify each tx as add / duplicate / utxo-conflict.
+
+    Body shapes (see _decrypt_request).
+    Returns: { to_add: [...], duplicates: [txid...], conflicts: [...], errors: [...] }
+    """
+    from src.pool.tx_parser import parse_raw_tx
+
+    store: TxStore = request.app["store"]
+    try:
+        body = await request.json()
+    except Exception:
+        return web.json_response({"error": "Invalid JSON"}, status=400)
+
+    payload, err_resp = await _decrypt_request(body)
+    if err_resp is not None:
+        return err_resp
+
+    txs, err = _validate_import_payload(payload, store)
+    if err:
+        return web.json_response({"error": err}, status=400)
+
+    to_add: list[dict] = []
+    duplicates: list[str] = []
+    conflicts: list[dict] = []
+    errors: list[dict] = []
+
+    for entry in txs:
+        txid_hint = entry.get("txid", "")
+        raw_hex = entry.get("raw_hex", "")
+        if not raw_hex:
+            errors.append({"txid": txid_hint, "error": "missing raw_hex"})
+            continue
+        try:
+            parsed = parse_raw_tx(raw_hex)
+        except Exception as e:
+            errors.append({"txid": txid_hint, "error": f"parse failed: {e}"})
+            continue
+        if txid_hint and txid_hint != parsed.txid:
+            errors.append({"txid": txid_hint, "error": "txid mismatch (hex tampered?)"})
+            continue
+
+        if store.get_tx(parsed.txid):
+            duplicates.append(parsed.txid)
+            continue
+
+        # UTXO conflict detection: any input already being spent by an active tx?
+        conflicting_pool_txids: set[str] = set()
+        shared_utxos: list[str] = []
+        for inp in parsed.inputs:
+            poolers = store.find_active_txs_spending_utxo(inp.prev_txid, inp.prev_vout)
+            if poolers:
+                conflicting_pool_txids.update(poolers)
+                shared_utxos.append(f"{inp.prev_txid}:{inp.prev_vout}")
+
+        if conflicting_pool_txids:
+            conflicts.append({
+                "imported_txid": parsed.txid,
+                "imported_target_block": entry.get("target_block"),
+                "existing_txids": sorted(conflicting_pool_txids),
+                "shared_utxos": shared_utxos,
+            })
+        else:
+            to_add.append({
+                "txid": parsed.txid,
+                "target_block": entry.get("target_block"),
+                "target_price": entry.get("target_price"),
+                "wallet_label": entry.get("wallet_label", ""),
+                "amount_sats": sum(o.value_sats for o in parsed.outputs),
+            })
+
+    return web.json_response({
+        "network": store.network,
+        "to_add": to_add,
+        "duplicates": duplicates,
+        "conflicts": conflicts,
+        "errors": errors,
+    })
+
+
+async def handle_pool_import_apply(request: web.Request) -> web.Response:
+    """Apply an import. Phase 1 refuses to proceed if any UTXO conflicts remain.
+
+    Body: same shape as import-plan, plus:
+      - resolutions: { <imported_txid>: "skip" | "add" | "replace" }
+        (Phase 2 will use this; Phase 1 only honors "skip" — conflicts force a 409 otherwise.)
+
+    All imported txs are written with status='pending' regardless of their original status.
+    """
+    from src.pool.tx_parser import parse_raw_tx
+
+    store: TxStore = request.app["store"]
+    try:
+        body = await request.json()
+    except Exception:
+        return web.json_response({"error": "Invalid JSON"}, status=400)
+
+    payload, err_resp = await _decrypt_request(body)
+    if err_resp is not None:
+        return err_resp
+
+    txs, err = _validate_import_payload(payload, store)
+    if err:
+        return web.json_response({"error": err}, status=400)
+
+    resolutions = body.get("resolutions") or {}
+    if not isinstance(resolutions, dict):
+        return web.json_response({"error": "resolutions must be an object"}, status=400)
+
+    # First pass: re-build the plan to validate conflicts haven't drifted since import-plan
+    parsed_cache: dict[str, tuple] = {}
+    blocking_conflicts: list[dict] = []
+    for entry in txs:
+        raw_hex = entry.get("raw_hex", "")
+        if not raw_hex:
+            continue
+        try:
+            parsed = parse_raw_tx(raw_hex)
+        except Exception:
+            continue
+        if store.get_tx(parsed.txid):
+            continue  # duplicate → skipped silently
+        conflicting: list[str] = []
+        for inp in parsed.inputs:
+            poolers = store.find_active_txs_spending_utxo(inp.prev_txid, inp.prev_vout)
+            conflicting.extend(poolers)
+        if conflicting and resolutions.get(parsed.txid) != "skip":
+            blocking_conflicts.append({
+                "imported_txid": parsed.txid,
+                "existing_txids": sorted(set(conflicting)),
+            })
+        parsed_cache[parsed.txid] = (parsed, entry, bool(conflicting))
+
+    if blocking_conflicts:
+        return web.json_response(
+            {
+                "error": "utxo_conflicts",
+                "message": (
+                    "Some imported txs share UTXOs with active pool txs. "
+                    "Phase 1 cannot resolve these automatically — resolve manually or skip them."
+                ),
+                "conflicts": blocking_conflicts,
+            },
+            status=409,
+        )
+
+    # Apply: write txs with status='pending', re-derive metadata, then re-attach schedule.
+    added = 0
+    skipped = 0
+    errors: list[dict] = []
+    for txid, (parsed, entry, had_conflict) in parsed_cache.items():
+        if had_conflict and resolutions.get(txid) == "skip":
+            skipped += 1
+            continue
+        try:
+            parsed.fee_sats = 0
+            parsed.fee_rate = 0
+            store.save_retained_tx(
+                parsed,
+                entry["raw_hex"],
+                wallet_label=entry.get("wallet_label") or "Pool import",
+            )
+            # depends_on: only set if the parent is also being imported or already in pool
+            dep = entry.get("depends_on")
+            if dep and store.get_tx(dep):
+                store.set_depends_on(parsed.txid, dep)
+            # Auto-schedule by nLockTime if user has the pref on (consistent with
+            # the single-tx import path). Falls through to 'pending' if locktime
+            # isn't in the future.
+            auto_scheduled = False
+            if store.get_state("auto_schedule_locktime") != "false":
+                res = _auto_schedule_by_locktime(store, parsed.txid)
+                auto_scheduled = bool(res.get("scheduled"))
+            # If nLockTime didn't schedule, fall back to the target_block recorded
+            # in the export (user explicitly scheduled it at a different height).
+            if not auto_scheduled:
+                target_block = entry.get("target_block")
+                if target_block:
+                    store.update_target_block(parsed.txid, int(target_block), keep_status=True)
+            added += 1
+        except Exception as e:
+            log.error("Failed to import tx %s: %s", txid[:16], e, exc_info=True)
+            errors.append({"txid": txid, "error": str(e)})
+
+    return web.json_response({
+        "added": added,
+        "skipped": skipped,
+        "duplicates": sum(1 for entry in txs if store.get_tx(entry.get("txid", "")) and entry.get("txid") not in parsed_cache),
+        "errors": errors,
     })
 
 
