@@ -15,6 +15,7 @@
       <p class="subtitle" id="page-subtitle">Proxy Electrum con broadcast programado de transacciones - umbrel.local:50005</p>
     </div>
     <div style="display:flex;gap:8px;align-items:center;">
+      <span id="price-display" style="display:none;font-size:13px;color:var(--text-muted);margin-right:4px"></span>
       <button class="small secondary" id="unit-btn" onclick="toggleUnit()" style="font-size:12px;padding:4px 10px;">sats</button>
       <button class="small secondary" id="lang-btn" onclick="toggleLang()" style="font-size:12px;padding:4px 10px;">EN</button>
     </div>
@@ -26,7 +27,6 @@
     <button class="tab-btn" data-tab="settings" onclick="switchTab('settings')" id="tab-btn-settings">Ajustes</button>
     <button class="tab-btn" data-tab="vault" onclick="switchTab('vault')" id="tab-btn-vault" style="display:none">Bóveda</button>
     <button class="tab-btn tab-btn-help" data-tab="howto" onclick="switchTab('howto')" id="tab-btn-howto">Cómo funciona</button>
-    <span id="price-display" style="display:none;margin-left:auto;font-size:13px;color:var(--text-muted);align-self:center;padding-right:8px"></span>
   </div>
 
   <!-- ===================== POOL TAB ===================== -->
