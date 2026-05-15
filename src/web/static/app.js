@@ -45,18 +45,16 @@ const i18n = {
     datePicker: 'Fecha objetivo', calcBlock: 'Calcular bloque', close: 'Cerrar',
     dateFuture: 'La fecha debe ser futura',
     blocks: 'bloques', bl: 'bl',
-    tabPool: 'Pool', tabSettings: 'Ajustes', tabVault: 'B\u00f3veda',
+    tabPool: 'Pool', tabSettings: 'Ajustes', tabVault: 'B\u00f3veda', tabHowto: 'C\u00f3mo funciona',
     setUpstream: '1. Conecta Broadcast Pool a un servidor Electrum',
-    setUpstreamDesc: 'Broadcast Pool necesita un servidor Electrum para conocer el estado de la red y retransmitir tus transacciones:',
-    setVault: '4. B\u00f3veda cifrada (Nostr)',
-    setPrefs: '5. Otras preferencias', setBehavior: '3. Comportamiento',
-    setBehaviorDesc: 'Cuando BP recibe una transacci\u00f3n con nLockTime en el futuro la agenda autom\u00e1ticamente para retransmitirla en el bloque o fecha indicados.', setLang: 'Idioma', setUnit: 'Unidad', setPort: 'Puerto',
-    setNpubHelp: 'Las transacciones confirmadas se purgan de BP despu\u00e9s de 1 bloque. Puedes almacenarlas cifradas para su posterior an\u00e1lisis dejando un npub.',
-    setNpubHelp2: 'Solo t\u00fa podr\u00e1s descifrarlas localmente con Alby, Nos2x u otra extensi\u00f3n de navegador NIP-07.',
-    setNpubWarn: 'Nota: valora no usar tu npub principal. Usa un npub burner que no asocie tu nym a la actividad de tx bitcoin.',
+    setUpstreamDesc: 'BP reenvía las txs a través de este servidor. También consulta altura de bloque y MTP para evaluar locktimes.',
+    setVault: '3. B\u00f3veda cifrada (Nostr)',
+    setPrefs: '4. Otras preferencias', setBehavior: '2. Retransmisión automática',
+    setBehaviorDesc: 'Txs con nLockTime futuro se agendan autom\u00e1ticamente al bloque o MTP indicados. Las txs con locktime 0 o ya alcanzado quedan pendientes hasta acci\u00f3n manual.', setLang: 'Idioma', setUnit: 'Unidad', setPort: 'Puerto',
+    setNpubHelp: 'BP purga las txs confirmadas tras 1 bloque. Configura un npub para archivarlas cifradas \u2014 solo descifrable con una extensi\u00f3n NIP-07 (Alby, nos2x).',
+    setNpubWarn: 'Nota: usa un npub burner \u2014 no asocies tu nym principal a tu actividad de tx bitcoin.',
     testConn: 'Verificar conexi\u00f3n',
     save: 'Guardar', saved: 'Guardado',
-    manualConn: 'Conexi\u00f3n manual',
     connecting: 'Conectando...', connected: 'Conectado',
     connectBtn: 'Conectar', useServer: 'Usar este servidor',
     currentUpstream: 'Conectado a:', noServers: 'No se detectaron servidores Electrum en la red local',
@@ -66,23 +64,22 @@ const i18n = {
     checking: 'Verificando...', disconnected: 'Sin conexi\u00f3n',
     npubSaved: 'npub guardada', npubCleared: 'npub eliminada',
     saveNpub: 'Guardar',
-    setConnect: '2. C\u00f3mo acumular transacciones',
-    connectDesc: 'Puedes pegar manualmente el hex de una transacci\u00f3n desde el tab Pool, o conectar tu wallet a Broadcast Pool como servidor Electrum para que las retenga autom\u00e1ticamente:',
-    connectLan: 'Red local',
+    removeNpub: 'Quitar',
+    removeNpubConfirm: '⚠ Vas a eliminar la npub configurada y la BÓVEDA cifrada asociada. Las txs archivadas se borran sin posibilidad de recuperación. ¿Continuar?',
     copied: 'copiado',
-    autoLocktime: 'Desactivar auto-agendado',
-    subLocktime: 'A. Desactivar auto-agendado para nLocktimes futuros', subPrice: 'B. Precio',
-    subLiana: 'C. Falseando altura de bloque (experimental)',
-    lianaDesc: 'Para wallets que no dejan configurar el nLockTime y lo ajustan ellas mismas a la altura de bloque actual, define el desfase de bloques que quieres mostrar. Pensado para billeteras como Liana, especialmente para programar transacciones de ciclado durante los pr\u00f3ximos meses o a\u00f1o:',
+    autoLocktime: 'Desactivar auto-agendado para nLocktimes futuros',
+    subLocktime: 'A. nLockTime', subPrice: 'B. Retransmisión por precio',
+    subLiana: 'C. Altura de bloque virtual',
+    lianaDesc: 'Algunas wallets (p.ej. Liana) fijan el nLockTime al bloque actual sin permitir cambiarlo. BP puede reportarles una altura virtual mayor para que firmen con nLockTime futuro. Configura el offset y activa la funci\u00f3n antes de crear cada tx de ciclado.',
     lianaOffset: 'Offset',
-    lianaBump: 'Salto por tx firmada',
-    lianaBumpLabel: 'bloques que avanza el fake tip cada vez que llega una tx firmada en él',
+    lianaBump: 'Avance por tx firmada',
+    lianaBumpLabel: 'bloques que avanza la altura virtual por cada tx recibida en ella',
     lianaDisableAt: 'Auto-desactivar',
     lianaDisableAtTemplate: 'en bloque {n} (faltan {k} bloques)',
     lianaDisableAtPassed: 'pendiente — se desactivará en el próximo bloque',
-    lianaEnabled: 'Activar falseado de altura de bloque (se desactiva automáticamente a los 12 bloques reales)',
-    lianaEnabledActive: 'Activar falseado de altura de bloque (se desactiva automáticamente a los 12 bloques reales en {n})',
-    priceDesc: 'Retransmitir transacciones autom\u00e1ticamente cuando el precio de Bitcoin cruce un umbral. Pensado para enviar colateral adicional a contratos de pr\u00e9stamo y evitar liquidaciones:',
+    lianaEnabled: 'Activar altura virtual (se desactiva en 12 bloques reales)',
+    lianaEnabledActive: 'Activar altura virtual (se desactiva en bloque {n})',
+    priceDesc: 'Retransmite txs al cruzar un umbral de precio de BTC. \u00datil para enviar colateral ante una liquidaci\u00f3n inminente.',
     priceEnabled: 'Activar retransmisi\u00f3n por precio',
     priceSource: 'Fuente', priceNone: 'Seleccionar...', priceCustom: 'Or\u00e1culo local',
     priceSchedule: 'Retransmitir si BTC', priceBelow: 'cae por debajo de', priceAbove: 'sube por encima de',
@@ -125,7 +122,7 @@ const i18n = {
     mtpLag: 'MTP lag', mtpPassed: 'MTP ya paso esta fecha',
     mtpTip: 'Median Time Past: mediana de los timestamps de los \u00faltimos 11 bloques. El reloj que usa Bitcoin para evaluar nLocktimes en base a tiempo.',
     virtualHeight: 'Altura virtual',
-    vhTip: 'Altura de bloque falsa que BP est\u00e1 enviando a las wallets cuando el falseado est\u00e1 activo. Las wallets firmar\u00e1n txs con nLockTime cerca de este valor.',
+    vhTip: 'Altura virtual que BP est\u00e1 reportando a las wallets. Las wallets firmar\u00e1n txs con nLockTime cerca de este valor.',
     mtpWill: 'MTP la alcanzara en',
   },
   en: {
@@ -136,8 +133,8 @@ const i18n = {
     connectionsTip: 'Wallets currently connected to Broadcast Pool',
     change: 'Change', host: 'Host', port: 'Port', connect: 'Connect',
     cancel: 'Cancel', reconnecting: 'Reconnecting...',
-    setBehavior: '3. Behavior',
-    setBehaviorDesc: 'When BP receives a transaction with a future nLockTime, it automatically schedules it for broadcast at the specified block or date.',
+    setBehavior: '2. Automatic broadcast',
+    setBehaviorDesc: 'Txs with a future nLockTime are auto-scheduled for broadcast at the specified block or MTP. Txs with locktime 0 or already reached stay pending until manual action.',
     importTx: 'Enter TX ✍️',
     poolActionsLabel: 'Pool:',
     poolImportHeader: 'Import',
@@ -163,17 +160,15 @@ const i18n = {
     datePicker: 'Target date', calcBlock: 'Calculate block', close: 'Close',
     dateFuture: 'Date must be in the future',
     blocks: 'blocks', bl: 'bl',
-    tabPool: 'Pool', tabSettings: 'Settings', tabVault: 'Vault',
+    tabPool: 'Pool', tabSettings: 'Settings', tabVault: 'Vault', tabHowto: 'How it works',
     setUpstream: '1. Connect Broadcast Pool to an Electrum server',
-    setUpstreamDesc: 'Broadcast Pool needs an Electrum server to track the network state and broadcast your transactions:',
-    setVault: '4. Encrypted vault (Nostr)',
-    setPrefs: '5. Other preferences', setLang: 'Language', setUnit: 'Unit', setPort: 'Port',
-    setNpubHelp: 'Confirmed transactions are purged from BP after 1 block. You can store them encrypted for later analysis by setting an npub.',
-    setNpubHelp2: 'Only you will be able to decrypt them locally with Alby, Nos2x or another NIP-07 browser extension.',
-    setNpubWarn: 'Note: consider not using your main npub. Use a burner npub that doesn\'t link your nym to Bitcoin tx activity.',
+    setUpstreamDesc: 'BP relays txs through this server. It also queries block height and MTP to evaluate locktimes.',
+    setVault: '3. Encrypted vault (Nostr)',
+    setPrefs: '4. Other preferences', setLang: 'Language', setUnit: 'Unit', setPort: 'Port',
+    setNpubHelp: 'BP purges confirmed txs after 1 block. Set an npub to archive them encrypted — only decryptable with a NIP-07 extension (Alby, nos2x).',
+    setNpubWarn: 'Tip: use a burner npub — don\'t link your main nym to your Bitcoin tx activity.',
     testConn: 'Test connection',
     save: 'Save', saved: 'Saved',
-    manualConn: 'Manual connection',
     connecting: 'Connecting...', connected: 'Connected',
     connectBtn: 'Connect', useServer: 'Use this server',
     currentUpstream: 'Connected to:', noServers: 'No Electrum servers detected on local network',
@@ -183,23 +178,22 @@ const i18n = {
     checking: 'Checking...', disconnected: 'Disconnected',
     npubSaved: 'npub saved', npubCleared: 'npub cleared',
     saveNpub: 'Save',
-    setConnect: '2. How to accumulate transactions',
-    connectDesc: 'You can manually paste a transaction hex from the Pool tab, or connect your wallet to Broadcast Pool as an Electrum server so it retains them automatically:',
-    connectLan: 'Local network',
+    removeNpub: 'Remove',
+    removeNpubConfirm: '⚠ You are about to delete the configured npub and its encrypted VAULT. Archived txs will be permanently deleted with no recovery. Continue?',
     copied: 'copied',
-    autoLocktime: 'Disable auto-scheduling',
-    subLocktime: 'A. Disable auto-scheduling for future nLockTimes', subPrice: 'B. Price',
-    subLiana: 'C. Faking blockheight (experimental)',
-    lianaDesc: 'For wallets that do not let you configure nLockTime and set it themselves to the current block height, define the block offset you want to show. Designed for wallets like Liana, especially for scheduling cycling transactions over the next months or year:',
+    autoLocktime: 'Disable auto-scheduling for future nLocktimes',
+    subLocktime: 'A. nLockTime', subPrice: 'B. Price-triggered broadcast',
+    subLiana: 'C. Virtual block height',
+    lianaDesc: 'Some wallets (e.g. Liana) set nLockTime to the current tip without allowing changes. BP can report a virtual height so they sign with a future nLockTime. Set the offset and enable before creating each cycling tx.',
     lianaOffset: 'Offset',
     lianaBump: 'Blocks bumped per signed tx',
-    lianaBumpLabel: 'blocks the fake tip advances each time a tx signed at it arrives',
+    lianaBumpLabel: 'blocks the virtual height advances per tx received at it',
     lianaDisableAt: 'Auto-disable',
     lianaDisableAtTemplate: 'at block {n} ({k} blocks left)',
     lianaDisableAtPassed: 'pending — will disable on next block',
-    lianaEnabled: 'Enable blockheight faking (auto-disables after 12 real blocks)',
-    lianaEnabledActive: 'Enable blockheight faking (auto-disables after 12 real blocks at {n})',
-    priceDesc: 'Automatically broadcast transactions when the Bitcoin price crosses a threshold. Designed to send additional collateral to loan contracts and avoid liquidations:',
+    lianaEnabled: 'Enable virtual height (auto-disables after 12 real blocks)',
+    lianaEnabledActive: 'Enable virtual height (auto-disables at block {n})',
+    priceDesc: 'Broadcasts txs when BTC price crosses a set threshold. Use this to send collateral before a loan gets liquidated.',
     priceEnabled: 'Enable price-based broadcast',
     priceSource: 'Source', priceNone: 'Select...', priceCustom: 'Local oracle',
     priceSchedule: 'Broadcast if BTC', priceBelow: 'drops below', priceAbove: 'rises above',
@@ -242,7 +236,7 @@ const i18n = {
     mtpLag: 'MTP lag', mtpPassed: 'MTP already passed this date',
     mtpTip: 'Median Time Past: median of the last 11 block timestamps. The clock Bitcoin uses to evaluate time-based nLocktimes.',
     virtualHeight: 'Virtual height',
-    vhTip: 'Fake block height that BP is serving to wallets when faking is active. Wallets will sign txs with nLockTime close to this value.',
+    vhTip: 'Virtual height BP is reporting to wallets. Wallets will sign txs with nLockTime close to this value.',
     mtpWill: 'MTP will reach it in',
   },
 };
@@ -266,6 +260,8 @@ function applyLang() {
   document.getElementById('tab-btn-pool').textContent = t('tabPool');
   document.getElementById('tab-btn-settings').textContent = t('tabSettings');
   document.getElementById('tab-btn-vault').textContent = t('tabVault');
+  document.getElementById('tab-btn-howto').textContent = t('tabHowto');
+  if (typeof renderHowto === 'function') renderHowto();
 
   document.getElementById('lbl-net').textContent = t('net');
   document.getElementById('lbl-height').textContent = t('height');
@@ -287,7 +283,6 @@ function applyLang() {
   document.getElementById('set-title-prefs').textContent = t('setPrefs');
   if (typeof applyExportImportI18n === 'function') applyExportImportI18n();
   document.getElementById('set-npub-help').textContent = t('setNpubHelp');
-  document.getElementById('set-npub-help2').textContent = t('setNpubHelp2');
   document.getElementById('set-npub-warn').textContent = t('setNpubWarn');
   document.getElementById('btn-test-conn').textContent = t('testConn');
   document.getElementById('set-lbl-port').textContent = t('setPort');
@@ -307,15 +302,14 @@ function applyLang() {
   document.getElementById('set-sub-price').textContent = t('subPrice');
   document.getElementById('set-price-desc').textContent = t('priceDesc');
   document.getElementById('set-lbl-price-enabled').textContent = t('priceEnabled');
-  document.getElementById('price-manual-summary').textContent = lang === 'es' ? 'URL manual' : 'Manual URL';
-  document.getElementById('manual-conn-summary').textContent = t('manualConn');
+  document.getElementById('price-manual-summary').textContent = lang === 'es' ? 'Configurar URL manualmente' : 'Configure URL manually';
+  document.getElementById('manual-conn-summary').textContent = lang === 'es' ? 'Configurar manualmente' : 'Configure manually';
+  // Banner del dashboard que sustituye la antigua sec 2
+  const cbLabel = document.getElementById('connect-banner-label');
+  if (cbLabel) cbLabel.textContent = lang === 'es' ? 'Conecta tus wallets a:' : 'Connect your wallets to:';
   const saveNpubBtn = document.getElementById('btn-save-npub');
   if (saveNpubBtn && saveNpubBtn.style.display !== 'none') saveNpubBtn.textContent = t('saveNpub');
 
-  // Connection section
-  document.getElementById('set-title-connect').textContent = t('setConnect');
-  document.getElementById('set-connect-desc').textContent = t('connectDesc');
-  document.getElementById('connect-lbl-lan').textContent = t('connectLan');
 
   // Vault tab
   document.getElementById('vault-no-npub-title').textContent = t('vaultNoNpub');
@@ -1432,6 +1426,7 @@ function applyNpubFieldState(npub) {
   const npubInput = document.getElementById('set-npub');
   const saveBtn = document.getElementById('btn-save-npub');
   const changeBtn = document.getElementById('btn-npub-change');
+  const removeBtn = document.getElementById('btn-npub-remove');
   const statusEl = document.getElementById('npub-status');
 
   if (npub) {
@@ -1440,6 +1435,10 @@ function applyNpubFieldState(npub) {
     saveBtn.style.display = 'none';
     changeBtn.style.display = 'inline-block';
     changeBtn.textContent = lang === 'es' ? 'Cambiar' : 'Change';
+    if (removeBtn) {
+      removeBtn.style.display = 'inline-block';
+      removeBtn.textContent = t('removeNpub');
+    }
     statusEl.textContent = '';
   } else {
     npubInput.readOnly = false;
@@ -1447,6 +1446,7 @@ function applyNpubFieldState(npub) {
     saveBtn.style.display = 'inline-block';
     saveBtn.textContent = t('saveNpub');
     changeBtn.style.display = 'none';
+    if (removeBtn) removeBtn.style.display = 'none';
     statusEl.textContent = '';
   }
 
@@ -1705,6 +1705,35 @@ async function saveNpub() {
   applyNpubFieldState(npub);
 
   statusEl.textContent = npub ? t('npubSaved') : t('npubCleared');
+  statusEl.style.color = 'var(--green)';
+  setTimeout(() => { statusEl.textContent = ''; }, 3000);
+}
+
+async function removeNpub() {
+  if (!confirm(t('removeNpubConfirm'))) return;
+
+  const statusEl = document.getElementById('npub-status');
+  const result = await fetchJSON('/api/npub', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ npub: '', clear_vault: true }),
+  });
+
+  if (result.error) {
+    statusEl.textContent = 'Error: ' + result.error;
+    statusEl.style.color = 'var(--red)';
+    return;
+  }
+
+  // Reset the input and switch the Vault tab back to hidden
+  document.getElementById('set-npub').value = '';
+  currentNpub = '';
+  updateVaultTabVisibility();
+  applyNpubFieldState('');
+  // If the user was viewing the Vault tab, send them back to Pool
+  if (activeTab === 'vault') switchTab('pool');
+
+  statusEl.textContent = t('npubCleared');
   statusEl.style.color = 'var(--green)';
   setTimeout(() => { statusEl.textContent = ''; }, 3000);
 }
@@ -2395,4 +2424,245 @@ async function doImportApply() {
 function _finishImport(result) {
   closePoolModal();
   refresh();
+}
+
+// --- How it works tab ---
+// Static educational content. Re-rendered when the language toggles.
+function renderHowto() {
+  const root = document.getElementById('tab-howto');
+  if (!root) return;
+  // Resolve the wallet connect address dynamically (same value as the dashboard banner)
+  const proxyPort = (currentStatus && currentStatus.proxy_port) || 50005;
+  const connectAddr = (location.hostname || 'tu-nodo.local') + ':' + proxyPort;
+  root.innerHTML = (lang === 'es') ? howtoHtmlES(connectAddr) : howtoHtmlEN(connectAddr);
+}
+
+function howtoHtmlES(connectAddr) {
+  return `
+  <div class="settings-section">
+    <h2 class="settings-title">1. Qué es Broadcast Pool</h2>
+    <p class="settings-help">Broadcast Pool (BP) es un proxy Electrum local. Se interpone entre tu wallet y tu servidor Electrum: cuando la wallet ordena broadcastear una tx, BP la <strong>retiene</strong> y la agenda para retransmitirla más tarde según el criterio que configures (bloque, MTP o precio de BTC).</p>
+    <p class="settings-help">Tu wallet se conecta a BP exactamente como se conectaría a cualquier servidor Electrum. BP se conecta por su lado al servidor real. Para la wallet, BP es transparente y actúa como un servidor Electrum, salvo en el broadcast (que lo retiene).</p>
+  </div>
+
+  <div class="settings-section">
+    <h2 class="settings-title">2. Casos de uso</h2>
+    <div class="settings-subsection">
+      <strong class="settings-subsection-title">Migración de wallet con privacidad</strong>
+      <p class="settings-help">Firma N transacciones hoy, cada una con un <code class="kbd-mono">nLockTime</code> futuro distinto (aleatorio entre bloques futuros). BP las retransmite en bloques separados: ningún observador on-chain puede vincularlas por coincidir en el mismo bloque, y la wallet firmante no deja huella de timing.</p>
+    </div>
+    <div class="settings-subsection">
+      <strong class="settings-subsection-title">Ciclados de Liana</strong>
+      <p class="settings-help">Liana requiere ciclar monedas periódicamente para <strong>evitar que la clave de recuperación quede activa</strong> antes de lo previsto. El contador del timelock relativo (CSV) empieza al recibir cada UTXO; si no se ciclan a tiempo, la recovery key puede gastar los fondos sin la firma de la clave primaria. Firma hoy las txs de ciclado con <code class="kbd-mono">nLockTime</code> varios meses en el futuro. BP las retransmite a su tiempo, sin que debas estar presente ni tener la wallet disponible.</p>
+    </div>
+    <div class="settings-subsection">
+      <strong class="settings-subsection-title">Colateral de préstamo Bitcoin</strong>
+      <p class="settings-help">Pre-firma una tx de envío de colateral con <code class="kbd-mono">locktime 0</code> y configura un umbral de precio en BP. Si BTC cae por debajo del umbral, BP retransmite la tx automáticamente, sin intervención manual. Útil para evitar liquidaciones en protocolos de préstamo.</p>
+    </div>
+  </div>
+
+  <div class="settings-section">
+    <h2 class="settings-title">3. Cómo conectarlo</h2>
+    <div class="settings-subsection">
+      <strong class="settings-subsection-title">Paso 1 — Apunta BP a tu servidor Electrum</strong>
+      <p class="settings-help">En <strong>Ajustes → Sección 1</strong>, introduce el host y puerto de tu servidor Electrum (p.ej. tu nodo Umbrel, Sparrow Server, Fulcrum). BP usará ese servidor para consultar la cadena y retransmitir transacciones.</p>
+    </div>
+    <div class="settings-subsection">
+      <strong class="settings-subsection-title">Paso 2 — Apunta tu wallet a BP</strong>
+      <p class="settings-help">Configura tu wallet para conectarse a BP en lugar de a tu servidor Electrum directamente. BP escucha en el puerto mostrado en la barra superior:</p>
+      <p class="settings-help"><code class="kbd-mono">${connectAddr}</code></p>
+      <p class="settings-help">Usa SSL desactivado (conexión TCP directa). Compatible con Sparrow, Liana y cualquier wallet que soporte servidores Electrum personalizados.</p>
+    </div>
+    <div class="settings-subsection">
+      <strong class="settings-subsection-title">Paso 3 — Envía una transacción</strong>
+      <p class="settings-help">Cuando la wallet broadcastee una tx, aparecerá en el Pool con estado <em>pendiente</em> o <em>programada</em>. A partir de ahí BP gestiona el timing.</p>
+    </div>
+  </div>
+
+  <div class="settings-section">
+    <h2 class="settings-title">4. Cómo BP clasifica el nLockTime</h2>
+    <p class="settings-help">BP lee el <code class="kbd-mono">nLockTime</code> de cada tx al recibirla y la clasifica en una de tres categorías. El comportamiento es distinto en cada caso.</p>
+    <table>
+      <thead>
+        <tr><th>Categoría</th><th>Condición</th><th>Qué hace BP</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><strong>Futuro</strong></td>
+          <td><code class="kbd-mono">locktime &gt; tip+1</code> o <code class="kbd-mono">mtp &lt; locktime</code></td>
+          <td>Agenda automáticamente. Retransmite cuando el bloque o MTP alcanzan el locktime. No requiere intervención. Estado: <em>programada</em>.</td>
+        </tr>
+        <tr>
+          <td><strong>Presente/Pasado ⚠</strong></td>
+          <td><code class="kbd-mono">0 &lt; locktime ≤ tip+1</code></td>
+          <td>Retiene con advertencia. Incluye el caso anti-fee-sniping (locktime ≈ altura actual). BP pide confirmación explícita antes de programar.</td>
+        </tr>
+        <tr>
+          <td><strong>Cero</strong></td>
+          <td><code class="kbd-mono">locktime == 0</code></td>
+          <td>Sin limitación temporal. La tx queda en estado <em>pendiente</em> hasta que la emites manualmente o hasta que se dispara un trigger de precio configurado.</td>
+        </tr>
+      </tbody>
+    </table>
+    <p class="alert-soft"><strong>Anti-fee-sniping fingerprint:</strong> Sparrow, Electrum y wallets similares fijan el nLockTime a la altura actual del bloque como defensa contra fee-sniping. Bitcoin Core añade una capa extra: en ~10% de las txs resta un valor aleatorio entre 0 y 99 bloques al nLockTime, para que las txs con retardo de broadcast (CoinJoins de alta latencia, hardware wallets offline) no queden claramente diferenciadas. Si una tx se emite 100+ bloques tras su firma, el delta locktime→confirmación revela <em>el momento aproximado en que fue firmada</em> — combinable con otras huellas para inferir la herramienta usada. Si programas este tipo de txs con retardo intencional, asumes ese riesgo de privacidad.</p>
+  </div>
+
+  <div class="settings-section">
+    <h2 class="settings-title">5. Cuándo retransmite BP</h2>
+    <div class="settings-subsection">
+      <strong class="settings-subsection-title">Por bloque</strong>
+      <p class="settings-help">BP monitoriza la altura de bloque del servidor upstream. Cuando <code class="kbd-mono">current_height ≥ locktime</code>, retransmite la tx. Comprobación en cada nuevo bloque.</p>
+    </div>
+    <div class="settings-subsection">
+      <strong class="settings-subsection-title">Por MTP (Median Time Past)</strong>
+      <p class="settings-help">Para locktimes expresados como timestamp Unix, Bitcoin usa el MTP: la mediana de los timestamps de los últimos 11 bloques. BP retransmite cuando <code class="kbd-mono">mtp &gt; locktime_timestamp</code> (la tx pasa a ser final en consenso exactamente en ese punto). El MTP suele ir <strong>~1 hora</strong> por detrás del reloj real bajo condiciones normales de minado — esta diferencia se muestra en la barra de estado como <em>MTP lag</em>.</p>
+    </div>
+    <div class="settings-subsection">
+      <strong class="settings-subsection-title">Por precio de BTC</strong>
+      <p class="settings-help">Configura una fuente de precio (CoinGecko o un oráculo local) y un umbral en Ajustes → BP consulta el precio periódicamente. Al cruzar el umbral, retransmite todas las txs que tengan ese trigger activo. Útil para txs con <code class="kbd-mono">locktime 0</code> que no tienen constraint de bloque.</p>
+    </div>
+  </div>
+
+  <div class="settings-section">
+    <h2 class="settings-title">6. Funciones avanzadas</h2>
+    <div class="settings-subsection">
+      <strong class="settings-subsection-title">Altura de bloque virtual (Liana)</strong>
+      <p class="settings-help">Liana fija el <code class="kbd-mono">nLockTime</code> a la altura del tip actual que ve en su servidor Electrum. No permite configurarlo manualmente. Pero si BP le reporta una altura virtual más alta (falsa), Liana firmará con un <code class="kbd-mono">nLockTime</code> futuro, bingo!</p>
+      <p class="settings-help">El mecanismo funciona por evento: cada tx que Liana firma al tip virtual (la altura de bloque falsa) incrementa el offset en N bloques (<em>bump</em>). Esto permite acumular varias txs de ciclado con locktimes progresivamente más lejanos en una sola sesión, sin necesidad de recalcular manualmente.</p>
+      <p class="settings-help"><strong>Cap de seguridad:</strong> la función se desactiva automáticamente a los 12 bloques reales desde que se activó. Pasado ese punto, la diferencia acumulada entre altura real y virtual podría confundir otras operaciones de la wallet. Volver a activar para la siguiente sesión de firma.</p>
+    </div>
+    <div class="settings-subsection">
+      <strong class="settings-subsection-title">Retransmisión por precio</strong>
+      <p class="settings-help">BP puede disparar el broadcast en función del precio de BTC. Configura una fuente de precio (CoinGecko o un oráculo local en tu nodo) y, por cada tx, un umbral con dirección — <em>por debajo de</em> o <em>por encima de</em> X. Cuando el precio cruza ese umbral, BP la retransmite inmediatamente.</p>
+      <p class="settings-help">El polling al oráculo es cada 30 segundos. BP rechaza saltos de precio &gt;15% entre poll y poll como protección contra valores aberrantes (oráculo defectuoso). Si tu nodo expone un oráculo local, BP lo prefiere sobre CoinGecko — auto-descubre IPs internas comunes (Umbrel, Start9).</p>
+      <p class="settings-help">Cada tx con trigger de precio puede tener una <strong>fecha de expiración</strong> opcional. Si el umbral no se cruza antes de esa fecha, la tx pasa a estado <em>expirada</em> y deja de monitorizarse. Sin expiración, queda armada indefinidamente.</p>
+      <p class="settings-help"><strong>Combinación con locktime 0:</strong> el caso canónico es pre-firmar una tx de envío de colateral con <code class="kbd-mono">locktime 0</code> + umbral "por debajo de $X". La tx queda lista para dispararse si el precio cae, sin requerir tu presencia. Si en lugar de locktime 0 usas un locktime futuro, el broadcast espera al primero que se cumpla.</p>
+    </div>
+    <div class="settings-subsection">
+      <strong class="settings-subsection-title">Bóveda cifrada (Nostr)</strong>
+      <p class="settings-help">BP purga las txs confirmadas tras 1 bloque para mantener el pool ligero. Si configuras un npub en Ajustes → Sección 3, BP archiva cada tx confirmada cifrada con NIP-44 v2. El cifrado usa ECDH entre una clave efímera del lado servidor y tu clave pública (npub): solo quien posea la clave privada correspondiente puede descifrar.</p>
+      <p class="settings-help">Los datos se guardan localmente en la base de datos de BP, no en relays Nostr. El descifrado ocurre en el browser vía extensión NIP-07 (Alby, nos2x): BP nunca ve tu clave privada. Usa un npub dedicado — no tu identidad Nostr principal — para no vincular tu actividad de txs a tu nym.</p>
+    </div>
+    <div class="settings-subsection">
+      <strong class="settings-subsection-title">Export / Import del pool</strong>
+      <p class="settings-help">Las txs pendientes y programadas viven en la base de datos local de BP. Si pierdes esa DB (reinstalación, migración de nodo), las txs sin broadcastear se pierden — los UTXOs quedan congelados hasta que alguien las retransmita o expire el locktime.</p>
+      <p class="settings-help">Exporta el pool regularmente como backup. El archivo <code class="kbd-mono">.bp</code> puede cifrarse con passphrase o con tu npub (NIP-44). Al importar, BP detecta duplicados y conflictos de UTXO y los omite sin sobreescribir el estado existente.</p>
+    </div>
+  </div>
+  `;
+}
+
+function howtoHtmlEN(connectAddr) {
+  return `
+  <div class="settings-section">
+    <h2 class="settings-title">1. What is Broadcast Pool</h2>
+    <p class="settings-help">Broadcast Pool (BP) is a local Electrum proxy. It sits between your wallet and your Electrum server: when the wallet orders a broadcast, BP <strong>holds</strong> the transaction and schedules it for later relay based on the criteria you configure (block height, MTP or BTC price).</p>
+    <p class="settings-help">Your wallet connects to BP exactly as it would to any Electrum server. BP connects to the real server on its end. From the wallet's perspective, BP is transparent and acts as an Electrum server, except for broadcasts (which it holds).</p>
+  </div>
+
+  <div class="settings-section">
+    <h2 class="settings-title">2. Use cases</h2>
+    <div class="settings-subsection">
+      <strong class="settings-subsection-title">Privacy-preserving wallet migration</strong>
+      <p class="settings-help">Sign N transactions today, each with a distinct future <code class="kbd-mono">nLockTime</code> (randomized across future blocks). BP broadcasts them in separate blocks: no on-chain observer can link them by timing, and the signing wallet leaves no timing fingerprint.</p>
+    </div>
+    <div class="settings-subsection">
+      <strong class="settings-subsection-title">Liana cycling transactions</strong>
+      <p class="settings-help">Liana requires periodic coin cycling to <strong>prevent the recovery key from becoming active</strong> prematurely. The relative timelock (CSV) clock starts when each UTXO is received; if coins aren't cycled in time, the recovery key can spend the funds without the primary key's signature. Sign today's cycling txs with <code class="kbd-mono">nLockTime</code> months in the future. BP broadcasts them on schedule without requiring you to be present or have the wallet available.</p>
+    </div>
+    <div class="settings-subsection">
+      <strong class="settings-subsection-title">Bitcoin loan collateral</strong>
+      <p class="settings-help">Pre-sign a collateral tx with <code class="kbd-mono">locktime 0</code> and configure a price threshold in BP. If BTC drops below the threshold, BP broadcasts the tx automatically — no manual intervention needed. Useful for avoiding liquidations in lending protocols.</p>
+    </div>
+  </div>
+
+  <div class="settings-section">
+    <h2 class="settings-title">3. How to connect</h2>
+    <div class="settings-subsection">
+      <strong class="settings-subsection-title">Step 1 — Point BP to your Electrum server</strong>
+      <p class="settings-help">In <strong>Settings → Section 1</strong>, enter the host and port of your Electrum server (e.g. your Umbrel node, Sparrow Server, Fulcrum). BP will use that server to query the chain and relay transactions.</p>
+    </div>
+    <div class="settings-subsection">
+      <strong class="settings-subsection-title">Step 2 — Point your wallet to BP</strong>
+      <p class="settings-help">Configure your wallet to connect to BP instead of directly to your Electrum server. BP listens on the port shown in the top bar:</p>
+      <p class="settings-help"><code class="kbd-mono">${connectAddr}</code></p>
+      <p class="settings-help">Use unencrypted TCP (no SSL). Compatible with Sparrow, Liana, and any wallet that supports custom Electrum servers.</p>
+    </div>
+    <div class="settings-subsection">
+      <strong class="settings-subsection-title">Step 3 — Send a transaction</strong>
+      <p class="settings-help">When the wallet broadcasts a tx, it will appear in the Pool with status <em>pending</em> or <em>scheduled</em>. From there, BP handles the timing.</p>
+    </div>
+  </div>
+
+  <div class="settings-section">
+    <h2 class="settings-title">4. How BP classifies nLockTime</h2>
+    <p class="settings-help">BP reads the <code class="kbd-mono">nLockTime</code> of each incoming tx and places it in one of three categories. Behavior differs per category.</p>
+    <table>
+      <thead>
+        <tr><th>Category</th><th>Condition</th><th>What BP does</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><strong>Future</strong></td>
+          <td><code class="kbd-mono">locktime &gt; tip+1</code> or <code class="kbd-mono">mtp &lt; locktime</code></td>
+          <td>Auto-schedules. Broadcasts when block height or MTP reaches the locktime. No action needed. Status: <em>scheduled</em>.</td>
+        </tr>
+        <tr>
+          <td><strong>Present/Past ⚠</strong></td>
+          <td><code class="kbd-mono">0 &lt; locktime ≤ tip+1</code></td>
+          <td>Holds with a warning. Includes the anti-fee-sniping case (locktime ≈ current height). BP requires explicit confirmation before scheduling.</td>
+        </tr>
+        <tr>
+          <td><strong>Zero</strong></td>
+          <td><code class="kbd-mono">locktime == 0</code></td>
+          <td>No time constraint. The tx stays <em>pending</em> until you broadcast it manually or a configured price trigger fires.</td>
+        </tr>
+      </tbody>
+    </table>
+    <p class="alert-soft"><strong>Anti-fee-sniping fingerprint:</strong> Sparrow, Electrum and similar wallets set nLockTime to the current block height as a fee-sniping defense. Bitcoin Core adds an extra privacy layer: in ~10% of transactions it subtracts a random value between 0 and 99 from the nLockTime, so that delayed broadcasts (high-latency CoinJoins, offline hardware wallets) blend in. If a tx is broadcast 100+ blocks after signing, the locktime→confirmation delta reveals <em>the approximate signing time</em> — combinable with other transaction fingerprints to suggest which tool was used. Scheduling these txs with an intentional delay means accepting that privacy trade-off.</p>
+  </div>
+
+  <div class="settings-section">
+    <h2 class="settings-title">5. When BP broadcasts</h2>
+    <div class="settings-subsection">
+      <strong class="settings-subsection-title">By block height</strong>
+      <p class="settings-help">BP monitors the upstream server's block height. When <code class="kbd-mono">current_height ≥ locktime</code>, the tx is broadcast. Checked on every new block.</p>
+    </div>
+    <div class="settings-subsection">
+      <strong class="settings-subsection-title">By MTP (Median Time Past)</strong>
+      <p class="settings-help">For timestamp-based locktimes, Bitcoin evaluates against the MTP: the median of the last 11 block timestamps. BP broadcasts when <code class="kbd-mono">mtp &gt; locktime_timestamp</code> (the tx becomes final under consensus at that exact point). MTP typically lags real clock time by <strong>~1 hour</strong> under normal mining conditions — this delta is shown in the status bar as <em>MTP lag</em>.</p>
+    </div>
+    <div class="settings-subsection">
+      <strong class="settings-subsection-title">By BTC price</strong>
+      <p class="settings-help">Configure a price source (CoinGecko or a local oracle) and a threshold in Settings → BP queries the price periodically. When the threshold is crossed, it broadcasts all txs with that trigger active. Most useful for txs with <code class="kbd-mono">locktime 0</code> that have no block constraint.</p>
+    </div>
+  </div>
+
+  <div class="settings-section">
+    <h2 class="settings-title">6. Advanced features</h2>
+    <div class="settings-subsection">
+      <strong class="settings-subsection-title">Virtual block height (Liana)</strong>
+      <p class="settings-help">Liana sets <code class="kbd-mono">nLockTime</code> to the current tip it sees from its Electrum server. It provides no way to override this. But if BP reports a higher (fake) virtual height, Liana will sign with a future <code class="kbd-mono">nLockTime</code> — bingo.</p>
+      <p class="settings-help">The mechanism is event-driven: each tx Liana signs at the virtual tip (the fake block height) bumps the offset by N blocks. This lets you accumulate several cycling txs with progressively later locktimes in a single session, without manual recalculation.</p>
+      <p class="settings-help"><strong>Safety cap:</strong> the feature auto-disables after 12 real blocks from activation. Beyond that, the accumulated gap between real and virtual height could confuse other wallet operations. Re-enable for the next signing session.</p>
+    </div>
+    <div class="settings-subsection">
+      <strong class="settings-subsection-title">Price-triggered broadcast</strong>
+      <p class="settings-help">BP can fire a broadcast based on the BTC price. Set up a price source (CoinGecko or a local oracle on your node) and, per tx, a threshold with direction — <em>below</em> or <em>above</em> X. When the price crosses that threshold, BP broadcasts the tx immediately.</p>
+      <p class="settings-help">The oracle is polled every 30 seconds. BP rejects price jumps &gt;15% between polls as a sanity check against bogus oracle values. If your node exposes a local price oracle, BP prefers it over CoinGecko — common internal IPs (Umbrel, Start9) are auto-discovered.</p>
+      <p class="settings-help">Each price-triggered tx can have an optional <strong>expiry date</strong>. If the threshold isn't crossed before that date, the tx becomes <em>expired</em> and is no longer monitored. Without an expiry, it stays armed indefinitely.</p>
+      <p class="settings-help"><strong>Pairing with locktime 0:</strong> the canonical use case is pre-signing a collateral tx with <code class="kbd-mono">locktime 0</code> + a "below $X" threshold. The tx is ready to fire if price drops, no presence required. If you use a future locktime instead of 0, the broadcast waits for whichever condition is met first.</p>
+    </div>
+    <div class="settings-subsection">
+      <strong class="settings-subsection-title">Encrypted vault (Nostr)</strong>
+      <p class="settings-help">BP purges confirmed txs after 1 block to keep the pool lean. If you set an npub in Settings → Section 3, BP archives each confirmed tx encrypted with NIP-44 v2. Encryption uses ECDH between a server-side ephemeral key and your public key (npub): only the holder of the corresponding private key can decrypt.</p>
+      <p class="settings-help">Data is stored in BP's local database, not on Nostr relays. Decryption happens in the browser via NIP-07 extension (Alby, nos2x): BP never sees your private key. Use a dedicated npub — not your main Nostr identity — to avoid linking tx activity to your nym.</p>
+    </div>
+    <div class="settings-subsection">
+      <strong class="settings-subsection-title">Pool export / import</strong>
+      <p class="settings-help">Pending and scheduled txs live in BP's local database. If that DB is lost (reinstall, node migration), unbroadcast txs are gone — UTXOs stay frozen until someone relays them or the locktime expires.</p>
+      <p class="settings-help">Export the pool regularly as a backup. The <code class="kbd-mono">.bp</code> file can be encrypted with a passphrase or your npub (NIP-44). On import, BP detects duplicates and UTXO conflicts and skips them without overwriting existing state.</p>
+    </div>
+  </div>
+  `;
 }

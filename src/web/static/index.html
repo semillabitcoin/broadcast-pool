@@ -4,7 +4,8 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Broadcast Pool</title>
-  <link rel="icon" type="image/png" href="/static/favicon.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="/static/favicon.png">
+  <link rel="apple-touch-icon" sizes="192x192" href="/static/apple-touch-icon.png">
   <link rel="stylesheet" href="/static/style.css">
 </head>
 <body>
@@ -24,6 +25,7 @@
     <button class="tab-btn active" data-tab="pool" onclick="switchTab('pool')" id="tab-btn-pool">Pool</button>
     <button class="tab-btn" data-tab="settings" onclick="switchTab('settings')" id="tab-btn-settings">Ajustes</button>
     <button class="tab-btn" data-tab="vault" onclick="switchTab('vault')" id="tab-btn-vault" style="display:none">Bóveda</button>
+    <button class="tab-btn tab-btn-help" data-tab="howto" onclick="switchTab('howto')" id="tab-btn-howto">Cómo funciona</button>
     <span id="price-display" style="display:none;margin-left:auto;font-size:13px;color:var(--text-muted);align-self:center;padding-right:8px"></span>
   </div>
 
@@ -61,6 +63,13 @@
         <span class="status-label" id="lbl-connections">Conexiones</span>
         <span class="status-value" id="s-connections">0</span>
       </div>
+    </div>
+
+    <!-- Wallet endpoint banner: connect your wallet's Electrum server to this address -->
+    <div class="connect-banner">
+      <span class="connect-banner-label" id="connect-banner-label">Conecta tus wallets a:</span>
+      <code class="kbd-mono" id="connect-lan">--</code>
+      <button class="copy-btn" onclick="copyConnectValue('connect-lan')" title="Copiar">&#128203;</button>
     </div>
 
     <div class="actions-bar">
@@ -169,7 +178,7 @@
       <p class="settings-help" id="set-upstream-desc"></p>
       <div id="discovered-servers" style="margin-bottom:12px;"></div>
       <details id="manual-conn" class="manual-connection">
-        <summary id="manual-conn-summary" style="cursor:pointer;font-size:13px;color:var(--text-muted);margin-bottom:12px;">Conexión manual</summary>
+        <summary id="manual-conn-summary" style="cursor:pointer;font-size:13px;color:var(--text-muted);margin-bottom:12px;">Configurar manualmente</summary>
         <div style="padding-top:8px;">
           <div class="settings-row">
             <label class="settings-label">Host</label>
@@ -178,119 +187,96 @@
           <div class="settings-row">
             <label class="settings-label" id="set-lbl-port">Puerto</label>
             <input type="number" id="set-port" class="inline-edit input-sm" placeholder="50001">
-            <label class="settings-label" style="margin-left:16px; display:flex; align-items:center; gap:4px;">
-              <input type="checkbox" id="set-ssl"> SSL
-            </label>
+            <label class="checkbox-row"><input type="checkbox" id="set-ssl"> SSL</label>
           </div>
           <div class="settings-row">
             <button class="small secondary" onclick="testUpstreamConnection()" id="btn-test-conn">Verificar conexión</button>
-            <button class="small" id="btn-connect-manual" onclick="connectManual()" style="display:none;margin-left:8px;">Conectar</button>
-            <span id="upstream-status" style="margin-left:12px;font-size:13px;color:var(--text-muted)"></span>
+            <button class="small" id="btn-connect-manual" onclick="connectManual()" style="display:none">Conectar</button>
+            <span id="upstream-status" style="font-size:13px;color:var(--text-muted)"></span>
           </div>
         </div>
       </details>
-      <div id="current-upstream" class="connected-label" style="margin-top:12px;"></div>
+      <div id="current-upstream" class="connected-label"></div>
     </div>
 
-    <!-- 2. How to accumulate transactions -->
+    <!-- 2. Behavior -->
     <div class="settings-section">
-      <h3 class="settings-title" id="set-title-connect">2. Cómo acumular transacciones</h3>
-      <p class="settings-help" id="set-connect-desc"></p>
-      <div id="connect-info" class="connect-info">
-        <div class="connect-row">
-          <span class="connect-label" id="connect-lbl-lan">Red local</span>
-          <code class="connect-value" id="connect-lan">--</code>
-          <button class="copy-btn" onclick="copyConnectValue('connect-lan')" title="Copiar">&#128203;</button>
-        </div>
-      </div>
-    </div>
+      <h3 class="settings-title" id="set-title-behavior">2. Comportamiento</h3>
 
-    <!-- 3. Behavior -->
-    <div class="settings-section">
-      <h3 class="settings-title" id="set-title-behavior">3. Comportamiento</h3>
-
-      <div class="behavior-item">
-        <div>
-          <strong class="behavior-subtitle" id="set-sub-locktime">Locktimes</strong>
-          <p class="settings-help" id="set-behavior-desc" style="margin-bottom:6px"></p>
-          <label style="display:flex;align-items:center;gap:8px;font-size:13px;color:var(--text-muted);cursor:pointer">
-            <input type="checkbox" id="set-auto-locktime" onchange="savePrefAutoLocktime(this.checked)">
-            <span id="set-lbl-auto-locktime">Auto agendar transacciones con locktime futuro</span>
-          </label>
-        </div>
+      <div class="settings-subsection">
+        <strong class="settings-subsection-title" id="set-sub-locktime">A. nLockTime</strong>
+        <p class="settings-help" id="set-behavior-desc"></p>
+        <label class="toggle-row">
+          <input type="checkbox" id="set-auto-locktime" onchange="savePrefAutoLocktime(this.checked)">
+          <span id="set-lbl-auto-locktime">Desactivar auto-agendado para nLocktimes futuros</span>
+        </label>
       </div>
 
-      <div class="behavior-item">
-        <div>
-          <strong class="behavior-subtitle" id="set-sub-price">Precio</strong>
-          <p class="settings-help" id="set-price-desc" style="margin-bottom:6px"></p>
-          <label style="display:flex;align-items:center;gap:8px;font-size:13px;color:var(--text-muted);cursor:pointer;margin-bottom:8px">
-            <input type="checkbox" id="set-price-enabled" onchange="togglePriceSource(this.checked)">
-            <span id="set-lbl-price-enabled">Activar retransmisión por precio</span>
-          </label>
-          <div id="price-source-config" style="display:none">
-            <div id="price-discovered" style="margin-bottom:12px;"></div>
-            <details class="manual-connection">
-              <summary id="price-manual-summary" style="cursor:pointer;font-size:13px;color:var(--text-muted);margin-bottom:12px;">URL manual</summary>
-              <div style="padding-top:8px;">
-                <div class="settings-row">
-                  <label class="settings-label">URL</label>
-                  <input type="text" id="set-price-url" class="inline-edit input-lg" placeholder="http://umbrel.local:3200">
-                  <button class="small" onclick="connectPriceUrl()" style="margin-left:8px;" id="btn-price-connect">Conectar</button>
-                </div>
-              </div>
-            </details>
-            <div id="price-current-source" class="connected-label" style="margin-top:12px;"></div>
+      <div class="settings-subsection">
+        <strong class="settings-subsection-title" id="set-sub-price">B. Retransmisión por precio</strong>
+        <p class="settings-help" id="set-price-desc"></p>
+        <label class="toggle-row">
+          <input type="checkbox" id="set-price-enabled" onchange="togglePriceSource(this.checked)">
+          <span id="set-lbl-price-enabled">Activar retransmisión por precio</span>
+        </label>
+        <div id="price-source-config" style="display:none;margin-top:8px">
+          <div id="price-discovered" style="margin-bottom:12px"></div>
+          <details class="manual-connection">
+            <summary id="price-manual-summary" style="cursor:pointer;font-size:13px;color:var(--text-muted);margin-bottom:12px">Configurar URL manualmente</summary>
+            <div class="settings-row">
+              <label class="settings-label">URL</label>
+              <input type="text" id="set-price-url" class="inline-edit input-lg" placeholder="http://umbrel.local:3200">
+              <button class="small" onclick="connectPriceUrl()" id="btn-price-connect">Conectar</button>
+            </div>
+          </details>
+          <div id="price-current-source" class="connected-label"></div>
+        </div>
+      </div>
+
+      <div class="settings-subsection">
+        <strong class="settings-subsection-title" id="set-sub-liana">C. Altura de bloque virtual</strong>
+        <p class="settings-help" id="set-liana-desc"></p>
+        <label class="toggle-row">
+          <input type="checkbox" id="set-liana-enabled" onchange="toggleLianaFake(this.checked)">
+          <span id="set-lbl-liana-enabled">Activar altura virtual (se desactiva en 12 bloques reales)</span>
+        </label>
+        <div id="liana-fake-config" class="is-disabled" style="margin-top:8px">
+          <div class="settings-row">
+            <label class="settings-label" id="set-lbl-liana-offset">Offset</label>
+            <input type="number" id="set-liana-offset" class="inline-edit input-md" min="0" max="70000" placeholder="0" value="0" oninput="updateLianaOffsetLabel(this.value)" onchange="saveLianaOffset(this.value)" disabled>
+            <span style="font-size:13px;color:var(--text-muted)" id="set-liana-offset-eq">desactivado</span>
           </div>
-        </div>
-      </div>
-
-      <div class="behavior-item">
-        <div>
-          <strong class="behavior-subtitle" id="set-sub-liana">Falseando altura de bloque (experimental)</strong>
-          <p class="settings-help" id="set-liana-desc" style="margin-bottom:6px"></p>
-          <label style="display:flex;align-items:center;gap:8px;font-size:13px;color:var(--text-muted);cursor:pointer;margin-bottom:8px">
-            <input type="checkbox" id="set-liana-enabled" onchange="toggleLianaFake(this.checked)">
-            <span id="set-lbl-liana-enabled">Activar falseado de altura de bloque (se desactiva automáticamente a los 12 bloques reales)</span>
-          </label>
-          <div id="liana-fake-config" class="is-disabled">
-            <div class="settings-row">
-              <label class="settings-label" id="set-lbl-liana-offset">Offset</label>
-              <input type="number" id="set-liana-offset" class="inline-edit input-md" min="0" max="70000" placeholder="0" value="0" oninput="updateLianaOffsetLabel(this.value)" onchange="saveLianaOffset(this.value)" disabled>
-              <span style="font-size:13px;color:var(--text-muted)" id="set-liana-offset-eq">desactivado</span>
-            </div>
-            <div class="settings-row">
-              <label class="settings-label" id="set-lbl-liana-bump">Salto por tx firmada</label>
-              <input type="number" id="set-liana-bump" class="inline-edit input-sm" min="1" max="10000" placeholder="1000" value="1000" onchange="saveLianaBump(this.value)" disabled>
-              <span style="font-size:13px;color:var(--text-muted)" id="set-liana-bump-label">bloques que avanza el fake tip cada vez que llega una tx firmada en él</span>
-            </div>
-            <div class="settings-row" id="set-liana-disable-at-row" style="display:none">
-              <label class="settings-label" id="set-lbl-liana-disable-at">Auto-desactivar</label>
-              <span style="font-size:13px;color:var(--text-muted)" id="set-liana-disable-at-label"></span>
-            </div>
+          <div class="settings-row">
+            <label class="settings-label" id="set-lbl-liana-bump">Salto por tx firmada</label>
+            <input type="number" id="set-liana-bump" class="inline-edit input-sm" min="1" max="10000" placeholder="1000" value="1000" onchange="saveLianaBump(this.value)" disabled>
+            <span style="font-size:13px;color:var(--text-muted)" id="set-liana-bump-label">bloques que avanza el fake tip cada vez que llega una tx firmada en él</span>
+          </div>
+          <div class="settings-row" id="set-liana-disable-at-row" style="display:none">
+            <label class="settings-label" id="set-lbl-liana-disable-at">Auto-desactivar</label>
+            <span style="font-size:13px;color:var(--text-muted)" id="set-liana-disable-at-label"></span>
           </div>
         </div>
       </div>
     </div>
 
-    <!-- 4. Vault (npub) -->
+    <!-- 3. Vault (npub) -->
     <div class="settings-section">
-      <h3 class="settings-title" id="set-title-vault">4. Bóveda cifrada (Nostr)</h3>
+      <h3 class="settings-title" id="set-title-vault">3. Bóveda cifrada (Nostr)</h3>
       <p class="settings-help" id="set-npub-help"></p>
-      <p class="settings-help" id="set-npub-help2"></p>
       <div class="settings-row">
         <label class="settings-label">npub</label>
         <input type="text" id="set-npub" class="inline-edit input-xl input-mono" placeholder="npub1..." autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false">
-        <button class="small" id="btn-save-npub" onclick="saveNpub()" style="margin-left:8px;display:none;">Guardar</button>
-        <button class="small secondary" id="btn-npub-change" onclick="unlockNpubField()" style="display:none;margin-left:8px;font-size:11px">Cambiar</button>
-        <span id="npub-status" style="margin-left:8px;font-size:11px;color:var(--grey);"></span>
+        <button class="small" id="btn-save-npub" onclick="saveNpub()" style="display:none">Guardar</button>
+        <button class="small secondary" id="btn-npub-change" onclick="unlockNpubField()" style="display:none;font-size:11px">Cambiar</button>
+        <button class="small secondary" id="btn-npub-remove" onclick="removeNpub()" style="display:none;font-size:11px;color:var(--red);border-color:var(--red)">Quitar</button>
+        <span id="npub-status" style="font-size:11px;color:var(--grey)"></span>
       </div>
-      <p class="settings-help" id="set-npub-warn" style="margin-top:4px"></p>
+      <p class="settings-help" id="set-npub-warn"></p>
     </div>
 
-    <!-- 5. Preferences -->
+    <!-- 4. Preferences -->
     <div class="settings-section">
-      <h3 class="settings-title" id="set-title-prefs">5. Otras preferencias</h3>
+      <h3 class="settings-title" id="set-title-prefs">4. Otras preferencias</h3>
       <div class="settings-row">
         <label class="settings-label" id="set-lbl-lang">Idioma</label>
         <select id="set-lang" class="inline-edit input-md" onchange="savePrefLang(this.value)">
@@ -355,6 +341,12 @@
         <tbody id="vault-body"></tbody>
       </table>
     </div>
+  </div>
+
+  <!-- ===================== HOW IT WORKS TAB ===================== -->
+  <div id="tab-howto" class="tab-content">
+    <!-- Content rendered by JS from i18n strings; placeholder during initial load -->
+    <div class="howto-loading settings-help" id="howto-loading">Cargando…</div>
   </div>
 
   <!-- ===================== POOL BACKUP MODALS ===================== -->

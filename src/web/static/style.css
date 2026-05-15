@@ -44,11 +44,45 @@ h1 { font-size: 24px; font-weight: 600; margin-bottom: 4px; }
 
 /* Tabs */
 .tab-bar { display: flex; gap: 0; margin-bottom: 20px; border-bottom: 1px solid var(--border); }
-.tab-btn { background: none; border: none; color: var(--text-muted); padding: 10px 20px; font-size: 14px; cursor: pointer; border-bottom: 2px solid transparent; margin-bottom: -1px; font-weight: 500; }
+.tab-btn {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  padding: 10px 24px;
+  min-width: 110px;
+  text-align: center;
+  font-size: 14px;
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+  font-weight: 500;
+}
 .tab-btn:hover { color: var(--text); }
 .tab-btn.active { color: var(--text); border-bottom-color: var(--blue); }
 .tab-content { display: none; }
 .tab-content.active { display: block; }
+
+/* Settings tab — same width and text rhythm as Cómo funciona.
+   Pool/Vault tabs keep the full 1200px body width for their tables. */
+#tab-settings { max-width: 720px; margin: 0 auto; }
+#tab-settings .settings-help { font-size: 14px; line-height: 1.65; }
+
+/* How-it-works tab — long-form educational content. Card width matches text width
+   so paragraphs fill the section visually (no awkward empty space on the right). */
+#tab-howto { max-width: 720px; margin: 0 auto; }
+/* Headings inherit .settings-title / .settings-subsection-title (same look as Ajustes) */
+#tab-howto p { font-size: 14px; color: var(--text-muted); line-height: 1.65; margin: 0 0 var(--space-3); }
+#tab-howto ul, #tab-howto ol { font-size: 14px; color: var(--text-muted); line-height: 1.65; margin: 0 0 var(--space-3) var(--space-4); }
+#tab-howto li { margin-bottom: var(--space-2); }
+#tab-howto code, #tab-howto .kbd-mono { font-size: 12px; }
+#tab-howto table { width: 100%; border-collapse: collapse; margin: 0 0 var(--space-4); font-size: 13px; }
+#tab-howto th, #tab-howto td { padding: var(--space-2) var(--space-3); text-align: left; border-bottom: 1px solid var(--border); vertical-align: top; }
+#tab-howto th { color: var(--text); font-weight: 600; }
+#tab-howto td { color: var(--text-muted); }
+.howto-card-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: var(--space-3); margin-bottom: var(--space-4); }
+.howto-card { background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius-md); padding: var(--space-4); }
+.howto-card h3 { margin-top: 0 !important; }
+.tab-btn-help { margin-left: auto; }   /* push the Help tab to the right edge */
 
 /* Settings — refactored to use design tokens */
 .settings-section {
@@ -76,7 +110,8 @@ h1 { font-size: 24px; font-weight: 600; margin-bottom: 4px; }
 .settings-label {
   font-size: 13px;
   color: var(--text-muted);
-  min-width: 130px;
+  min-width: 90px;
+  text-align: right;
   flex-shrink: 0;
 }
 .settings-help {
@@ -113,15 +148,31 @@ h1 { font-size: 24px; font-weight: 600; margin-bottom: 4px; }
 /* Disabled state — opacity + no interaction without inline styles */
 .is-disabled { opacity: 0.4; pointer-events: none; }
 
-/* Input width modifiers (apply alongside .inline-edit) */
-.input-sm { width: 80px; }
-.input-md { width: 140px; }
-.input-lg { width: 280px; }
-.input-xl { width: 100%; max-width: 520px; }
+/* Input width modifiers (apply alongside .inline-edit).
+   Doubled specificity (.inline-edit.input-XX) so they override the base width
+   regardless of source-order. */
+.inline-edit.input-sm { width: 80px; }
+.inline-edit.input-md { width: 140px; }
+.inline-edit.input-lg { width: 280px; }
+.inline-edit.input-xl { width: 100%; min-width: 0; flex: 1 1 auto; }
 .input-mono { font-family: 'SF Mono','Fira Code',monospace; font-size: 12px; }
 
 /* Checkbox row helper */
 .checkbox-row { display: flex; align-items: center; gap: var(--space-2); font-size: 13px; cursor: pointer; }
+
+/* Toggle row — single canonical pattern for "checkbox + label" inside settings.
+   Replaces 4 different inline-style flavors that existed before. */
+.toggle-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: 13px;
+  color: var(--text-muted);
+  cursor: pointer;
+  margin-bottom: var(--space-2);
+}
+.toggle-row:last-child { margin-bottom: 0; }
+.toggle-row input[type="checkbox"] { margin: 0; }
 
 /* Modal system (reusable beyond pool export/import) */
 .modal-backdrop {
@@ -232,6 +283,43 @@ h1 { font-size: 24px; font-weight: 600; margin-bottom: 4px; }
   margin: 0 0 var(--space-3);
   line-height: 1.5;
 }
+
+/* Compact info banner: shows the BP proxy endpoint at the top of the Pool tab */
+.connect-banner {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: var(--space-2) var(--space-3);
+  margin: 0 0 var(--space-3);
+  font-size: 13px;
+}
+.connect-banner-label { color: var(--text-muted); }
+.connect-banner .kbd-mono { font-size: 12px; padding: var(--space-1) var(--space-2); }
+.connect-banner .copy-btn {
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  color: var(--text-muted);
+  font-size: 14px;
+  padding: 0;
+}
+.connect-banner .copy-btn:hover { color: var(--text); }
+
+/* Inline <code> uses of kbd-mono:
+   1) each pill stays on one line (no mid-content break)
+   2) thin vertical padding so consecutive pills don't overlap when the line wraps */
+code.kbd-mono {
+  white-space: nowrap;
+  padding: 1px 6px;
+  font-size: 12px;
+  line-height: 1.5;
+  display: inline-block;
+}
+/* Bumps line-height so stacked code pills inside table cells get vertical breathing room */
+#tab-howto td { line-height: 2; }
 
 /* Inline keyboard / code value display */
 .kbd-mono {
