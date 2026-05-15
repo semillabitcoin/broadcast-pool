@@ -304,9 +304,10 @@ function applyLang() {
   document.getElementById('set-lbl-price-enabled').textContent = t('priceEnabled');
   document.getElementById('price-manual-summary').textContent = lang === 'es' ? 'Configurar URL manualmente' : 'Configure URL manually';
   document.getElementById('manual-conn-summary').textContent = lang === 'es' ? 'Configurar manualmente' : 'Configure manually';
-  // Banner del dashboard que sustituye la antigua sec 2
-  const cbLabel = document.getElementById('connect-banner-label');
-  if (cbLabel) cbLabel.textContent = lang === 'es' ? 'Conecta tus wallets a:' : 'Connect your wallets to:';
+  // Banner del dashboard: el texto lo decide loadConnectInfo() según si hay
+  // upstream Electrum conectado (depende del status), así que aquí solo
+  // re-renderizamos cuando ya tenemos status fresco.
+  if (currentStatus && typeof loadConnectInfo === 'function') loadConnectInfo(currentStatus);
   const saveNpubBtn = document.getElementById('btn-save-npub');
   if (saveNpubBtn && saveNpubBtn.style.display !== 'none') saveNpubBtn.textContent = t('saveNpub');
 
@@ -1584,11 +1585,30 @@ function unlockNpubField() {
 // --- Wallet connection info ---
 
 function loadConnectInfo(status) {
+  const label = document.getElementById('connect-banner-label');
+  const code = document.getElementById('connect-lan');
+  const copyBtn = document.querySelector('.connect-banner .copy-btn');
+
+  // Until BP is connected to an Electrum upstream, scheduler can't run and
+  // serving the proxy address would mislead the user. Show a prompt instead.
+  const upstreamConnected = !!(status && status.network);
+
+  if (!upstreamConnected) {
+    label.textContent = lang === 'es'
+      ? 'Conecta Broadcast Pool a un servidor Electrum para continuar'
+      : 'Connect Broadcast Pool to an Electrum server to continue';
+    code.style.display = 'none';
+    if (copyBtn) copyBtn.style.display = 'none';
+    return;
+  }
+
   const proxyPort = status.proxy_port || 50005;
   const hostname = location.hostname || 'tu-nodo.local';
   const lanAddr = hostname + ':' + proxyPort;
-
-  document.getElementById('connect-lan').textContent = lanAddr;
+  label.textContent = lang === 'es' ? 'Conecta tu wallet a:' : 'Connect your wallet to:';
+  code.textContent = lanAddr;
+  code.style.display = '';
+  if (copyBtn) copyBtn.style.display = '';
 }
 
 function copyConnectValue(elementId) {
