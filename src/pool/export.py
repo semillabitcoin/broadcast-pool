@@ -89,6 +89,26 @@ def decrypt_passphrase(file_obj: dict, passphrase: str) -> dict:
     return json.loads(plaintext.decode("utf-8"))
 
 
+def build_unencrypted(payload: dict) -> dict:
+    """Embed the payload inline (no encryption) so the file is plain readable JSON.
+
+    Used when the user explicitly opts out of encryption (acknowledged warning).
+    Encrypted variants use {ciphertext, encryption_meta}; for "none" the payload
+    sits under "payload" directly, so the file can be opened in any editor.
+    """
+    return {
+        "encryption": "none",
+        "payload": payload,
+    }
+
+
+def decrypt_unencrypted(file_obj: dict) -> dict:
+    """Read the inline payload from an unencrypted export."""
+    if "payload" not in file_obj or not isinstance(file_obj["payload"], dict):
+        raise ValueError("Malformed unencrypted export: missing 'payload' object")
+    return file_obj["payload"]
+
+
 def encrypt_nip44(payload: dict, npub: str) -> dict:
     """Encrypt the payload with NIP-44 v2 for the given npub."""
     enc = encrypt_for_npub(payload, npub)

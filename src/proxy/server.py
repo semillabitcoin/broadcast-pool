@@ -17,6 +17,13 @@ class ProxyServer:
         self.store = store
         self.sessions: list[ElectrumSession] = []
         self._server: asyncio.Server | None = None
+        # Wired by main.py after Scheduler is constructed (circular dependency).
+        # Sessions reach the scheduler through this attribute to trigger CPFP rescans.
+        self.scheduler = None
+
+    def set_scheduler(self, scheduler) -> None:
+        """Wire the scheduler reference (called from main.py after both are built)."""
+        self.scheduler = scheduler
 
     async def start(self) -> None:
         self._server = await asyncio.start_server(
@@ -49,14 +56,15 @@ class ProxyServer:
         for session in list(self.sessions):
             await session._notify_subscriptions(scripthashes)
 
-    async def extend_all_liana_chains(self) -> int:
-        """Ask every Liana session to extend its fake chain by 1 header and push to its wallet.
+    async def extend_all_liana_chains(self, n: int = 1) -> int:
+        """Ask every Liana session to extend its fake chain by `n` headers and push them.
 
         Returns the number of sessions that successfully advanced.
         """
         count = 0
         for session in list(self.sessions):
-            if await session.advance_fake_chain():
+            advanced = await session.advance_fake_chain(n=n)
+            if advanced:
                 count += 1
         return count
 
@@ -68,6 +76,7 @@ class ProxyServer:
             client_writer=writer,
             store=self.store,
             on_close=self._remove_session,
+            proxy_server=self,
         )
         self.sessions.append(session)
         await session.run()

@@ -20,8 +20,12 @@ const i18n = {
     connectionsTip: 'Wallets conectadas a Broadcast Pool en este momento',
     change: 'Cambiar', host: 'Host', port: 'Puerto', connect: 'Conectar',
     cancel: 'Cancelar', reconnecting: 'Reconectando...',
-    aaPrefix: 'Retransmitir pendientes a partir del bloque', aaGap: 'cada', aaSuffix1: 'bloque', aaSuffixN: 'bloques',
-    assign: 'Agendar', importTx: 'Importar TX',
+    importTx: 'Introducir TX ✍️',
+    poolActionsLabel: 'Pool:',
+    poolImportHeader: 'Importar',
+    poolExportHeader: 'Exportar',
+    presentPastWarn: '⚠ Esta tx tiene un nLockTime ya alcanzado. Emitirla deja una huella detectable en la cadena (anti-fee-sniping fingerprint). ¿Continuar?',
+    lockIconPastTip: 'nLockTime ya alcanzado — la tx puede emitirse pero deja huella detectable en cadena',
     pasteHex: 'Pega el hex de una transaccion firmada',
     wallet: 'Wallet', import_btn: 'Importar', importing: 'Importando...',
     other: 'Otro',
@@ -37,7 +41,6 @@ const i18n = {
     emit: 'Emitir ahora', delete: 'Eliminar', retry: 'Reintentar',
     emitConfirm: 'Emitir esta transaccion ahora?',
     deleteConfirm: 'Eliminar esta transaccion? Los UTXOs quedaran libres.',
-    enterBase: 'Introduce un bloque base',
     pasteAlert: 'Pega el hex de la transaccion',
     datePicker: 'Fecha objetivo', calcBlock: 'Calcular bloque', close: 'Cerrar',
     dateFuture: 'La fecha debe ser futura',
@@ -47,7 +50,7 @@ const i18n = {
     setUpstreamDesc: 'Broadcast Pool necesita un servidor Electrum para conocer el estado de la red y retransmitir tus transacciones:',
     setVault: '4. B\u00f3veda cifrada (Nostr)',
     setPrefs: '5. Otras preferencias', setBehavior: '3. Comportamiento',
-    setBehaviorDesc: 'Cuando BP recibe una transacci\u00f3n con nLockTime en el futuro, puede agendarla autom\u00e1ticamente para retransmitirla en el bloque o fecha indicados:', setLang: 'Idioma', setUnit: 'Unidad', setPort: 'Puerto',
+    setBehaviorDesc: 'Cuando BP recibe una transacci\u00f3n con nLockTime en el futuro la agenda autom\u00e1ticamente para retransmitirla en el bloque o fecha indicados.', setLang: 'Idioma', setUnit: 'Unidad', setPort: 'Puerto',
     setNpubHelp: 'Las transacciones confirmadas se purgan de BP despu\u00e9s de 1 bloque. Puedes almacenarlas cifradas para su posterior an\u00e1lisis dejando un npub.',
     setNpubHelp2: 'Solo t\u00fa podr\u00e1s descifrarlas localmente con Alby, Nos2x u otra extensi\u00f3n de navegador NIP-07.',
     setNpubWarn: 'Nota: valora no usar tu npub principal. Usa un npub burner que no asocie tu nym a la actividad de tx bitcoin.',
@@ -67,12 +70,13 @@ const i18n = {
     connectDesc: 'Puedes pegar manualmente el hex de una transacci\u00f3n desde el tab Pool, o conectar tu wallet a Broadcast Pool como servidor Electrum para que las retenga autom\u00e1ticamente:',
     connectLan: 'Red local',
     copied: 'copiado',
-    autoLocktime: 'Auto agendar transacciones con locktime futuro',
-    subLocktime: 'A. Auto programado para nLockTimes futuros', subPrice: 'B. Precio',
+    autoLocktime: 'Desactivar auto-agendado',
+    subLocktime: 'A. Desactivar auto-agendado para nLocktimes futuros', subPrice: 'B. Precio',
     subLiana: 'C. Falseando altura de bloque (experimental)',
     lianaDesc: 'Para wallets que no dejan configurar el nLockTime y lo ajustan ellas mismas a la altura de bloque actual, define el desfase de bloques que quieres mostrar. Pensado para billeteras como Liana, especialmente para programar transacciones de ciclado durante los pr\u00f3ximos meses o a\u00f1o:',
-    lianaOffset: 'Offset', lianaIncrement: 'Avance',
-    lianaIncrementLabel: 'por bloque virtual',
+    lianaOffset: 'Offset',
+    lianaBump: 'Salto por tx firmada',
+    lianaBumpLabel: 'bloques que avanza el fake tip cada vez que llega una tx firmada en él',
     lianaDisableAt: 'Auto-desactivar',
     lianaDisableAtTemplate: 'en bloque {n} (faltan {k} bloques)',
     lianaDisableAtPassed: 'pendiente — se desactivará en el próximo bloque',
@@ -83,12 +87,14 @@ const i18n = {
     priceSource: 'Fuente', priceNone: 'Seleccionar...', priceCustom: 'Or\u00e1culo local',
     priceSchedule: 'Retransmitir si BTC', priceBelow: 'cae por debajo de', priceAbove: 'sube por encima de',
     priceExpiry: 'Caduca', priceExpired: 'expirada',
-    setTitleBackup: '5. Copia de seguridad del pool',
-    setBackupHelp: 'Exporta tus transacciones activas (pending + scheduled) a un archivo cifrado para no perderlas si reinicias o migras BP. Re-imp\u00f3rtalas m\u00e1s tarde sin tener que volver a firmar.',
     poolExport: 'Exportar pool', poolImport: 'Importar pool',
     exportModalTitle: 'Exportar pool',
     exportModalHelp: 'Elige c\u00f3mo cifrar el archivo. El export incluye solo transacciones activas (pending + scheduled).',
     exportMethodPassphrase: 'Passphrase', exportMethodNip44: 'NIP-44 (tu npub)',
+    exportMethodNone: 'Sin cifrar (texto plano)',
+    exportNoneWarn: '⚠ El archivo contendrá tus transacciones firmadas en claro. Cualquiera con acceso podrá verlas y retransmitirlas.',
+    exportNoneAck: 'Entiendo y quiero exportar sin cifrar',
+    exportNoneAckRequired: 'Marca la casilla de confirmación',
     exportPassphrasePlaceholder: 'Passphrase (m\u00edn 8)',
     exportPassphraseConfirmPlaceholder: 'Confirma passphrase',
     exportPassphraseWarn: '\u26a0 Si pierdes la passphrase, el archivo es irrecuperable.',
@@ -130,11 +136,14 @@ const i18n = {
     connectionsTip: 'Wallets currently connected to Broadcast Pool',
     change: 'Change', host: 'Host', port: 'Port', connect: 'Connect',
     cancel: 'Cancel', reconnecting: 'Reconnecting...',
-    aaPrefix: 'Broadcast pending from block', aaGap: 'every',
     setBehavior: '3. Behavior',
-    setBehaviorDesc: 'When BP receives a transaction with a future nLockTime, it can automatically schedule it for broadcast at the specified block or date:',
-    aaSuffix1: 'block', aaSuffixN: 'blocks',
-    assign: 'Assign', importTx: 'Import TX',
+    setBehaviorDesc: 'When BP receives a transaction with a future nLockTime, it automatically schedules it for broadcast at the specified block or date.',
+    importTx: 'Enter TX ✍️',
+    poolActionsLabel: 'Pool:',
+    poolImportHeader: 'Import',
+    poolExportHeader: 'Export',
+    presentPastWarn: '⚠ This tx has a nLockTime that already passed. Broadcasting it leaves a detectable on-chain fingerprint (anti-fee-sniping). Continue?',
+    lockIconPastTip: 'nLockTime already passed — tx can be broadcast but leaves a detectable on-chain fingerprint',
     pasteHex: 'Paste the hex of a signed transaction',
     wallet: 'Wallet', import_btn: 'Import', importing: 'Importing...',
     other: 'Other',
@@ -150,7 +159,6 @@ const i18n = {
     emit: 'Broadcast now', delete: 'Delete', retry: 'Retry',
     emitConfirm: 'Broadcast this transaction now?',
     deleteConfirm: 'Delete this transaction? UTXOs will be freed.',
-    enterBase: 'Enter a base block',
     pasteAlert: 'Paste the transaction hex',
     datePicker: 'Target date', calcBlock: 'Calculate block', close: 'Close',
     dateFuture: 'Date must be in the future',
@@ -179,12 +187,13 @@ const i18n = {
     connectDesc: 'You can manually paste a transaction hex from the Pool tab, or connect your wallet to Broadcast Pool as an Electrum server so it retains them automatically:',
     connectLan: 'Local network',
     copied: 'copied',
-    autoLocktime: 'Auto-schedule transactions with future locktime',
-    subLocktime: 'A. Auto-scheduling for future nLockTimes', subPrice: 'B. Price',
+    autoLocktime: 'Disable auto-scheduling',
+    subLocktime: 'A. Disable auto-scheduling for future nLockTimes', subPrice: 'B. Price',
     subLiana: 'C. Faking blockheight (experimental)',
     lianaDesc: 'For wallets that do not let you configure nLockTime and set it themselves to the current block height, define the block offset you want to show. Designed for wallets like Liana, especially for scheduling cycling transactions over the next months or year:',
-    lianaOffset: 'Offset', lianaIncrement: 'Advance',
-    lianaIncrementLabel: 'per virtual block',
+    lianaOffset: 'Offset',
+    lianaBump: 'Blocks bumped per signed tx',
+    lianaBumpLabel: 'blocks the fake tip advances each time a tx signed at it arrives',
     lianaDisableAt: 'Auto-disable',
     lianaDisableAtTemplate: 'at block {n} ({k} blocks left)',
     lianaDisableAtPassed: 'pending — will disable on next block',
@@ -195,12 +204,14 @@ const i18n = {
     priceSource: 'Source', priceNone: 'Select...', priceCustom: 'Local oracle',
     priceSchedule: 'Broadcast if BTC', priceBelow: 'drops below', priceAbove: 'rises above',
     priceExpiry: 'Expires', priceExpired: 'expired',
-    setTitleBackup: '5. Pool backup',
-    setBackupHelp: 'Export your active transactions (pending + scheduled) to an encrypted file so you don\'t lose them on restart or migration. Re-import them later without re-signing.',
     poolExport: 'Export pool', poolImport: 'Import pool',
     exportModalTitle: 'Export pool',
     exportModalHelp: 'Choose how to encrypt the file. The export only includes active transactions (pending + scheduled).',
     exportMethodPassphrase: 'Passphrase', exportMethodNip44: 'NIP-44 (your npub)',
+    exportMethodNone: 'Unencrypted (plaintext)',
+    exportNoneWarn: '⚠ The file will contain your signed transactions in clear text. Anyone with access can see and rebroadcast them.',
+    exportNoneAck: 'I understand and want to export unencrypted',
+    exportNoneAckRequired: 'Check the acknowledgement box',
     exportPassphrasePlaceholder: 'Passphrase (min 8)',
     exportPassphraseConfirmPlaceholder: 'Confirm passphrase',
     exportPassphraseWarn: '⚠ If you lose the passphrase, the file is unrecoverable.',
@@ -264,7 +275,10 @@ function applyLang() {
   document.getElementById('lbl-scheduled').textContent = t('scheduled');
   document.getElementById('lbl-connections').textContent = t('connections');
   document.getElementById('lbl-connections').title = t('connectionsTip');
-  document.getElementById('btn-import').textContent = t('importTx');
+  document.getElementById('btn-import').innerHTML = t('importTx');
+  document.getElementById('lbl-pool-actions').textContent = t('poolActionsLabel');
+  document.getElementById('btn-pool-import-header').textContent = t('poolImportHeader');
+  document.getElementById('btn-pool-export-header').textContent = t('poolExportHeader');
 
   // Settings tab
   document.getElementById('set-title-upstream').textContent = t('setUpstream');
@@ -286,8 +300,8 @@ function applyLang() {
   document.getElementById('set-sub-liana').textContent = t('subLiana');
   document.getElementById('set-liana-desc').textContent = t('lianaDesc');
   document.getElementById('set-lbl-liana-offset').textContent = t('lianaOffset');
-  document.getElementById('set-lbl-liana-increment').textContent = t('lianaIncrement');
-  document.getElementById('set-liana-increment-label').textContent = t('lianaIncrementLabel');
+  document.getElementById('set-lbl-liana-bump').textContent = t('lianaBump');
+  document.getElementById('set-liana-bump-label').textContent = t('lianaBumpLabel');
   document.getElementById('set-lbl-liana-disable-at').textContent = t('lianaDisableAt');
   document.getElementById('set-lbl-liana-enabled').textContent = t('lianaEnabled');
   document.getElementById('set-sub-price').textContent = t('subPrice');
@@ -309,10 +323,6 @@ function applyLang() {
   document.getElementById('vault-no-ext-title').textContent = t('vaultNoExt');
   document.getElementById('vault-no-ext-desc').textContent = t('vaultNoExtDesc');
 
-  document.getElementById('lbl-aa-prefix').textContent = t('aaPrefix');
-  document.getElementById('lbl-aa-gap').textContent = t('aaGap');
-  updateAaSuffix();
-  document.getElementById('btn-assign').textContent = t('assign');
 
   document.getElementById('import-label-text').textContent = t('pasteHex') + ':';
   document.getElementById('import-wallet-label').textContent = t('wallet') + ':';
@@ -332,9 +342,6 @@ function applyLang() {
   document.getElementById('th-target').textContent = t('thTarget');
   document.getElementById('th-actions').textContent = t('thActions');
 
-  document.getElementById('btn-rescan').title = lang === 'es'
-    ? 'Re-escanear dependencias y actualizar fee rates'
-    : 'Re-scan dependencies and refresh fee rates';
   document.getElementById('confirmed-heading').innerHTML = `<span id="history-arrow" class="history-arrow">${historyOpen ? '›' : '›'}</span> ${t('confirmed_title')}`;
   document.getElementById('footer-inspired').textContent = t('footerInspired');
   document.getElementById('footer-made').innerHTML = t('footerMade') + ' 🕳️🐇';
@@ -402,11 +409,6 @@ function updateStatus(s) {
       : `Median Time Past: median of last 11 block timestamps.\nBitcoin's clock for timelocks.\nCurrent lag: ${lagMin} min vs system clock.\nUnix: ${s.current_mtp}`;
   } else {
     document.getElementById('s-mtp').textContent = '--';
-  }
-
-  const aaBase = document.getElementById('aa-base');
-  if (!aaBase.value && s.current_height) {
-    aaBase.value = s.current_height + 6;
   }
 
   // Virtual height display (replaces MTP when faking is active)
@@ -659,7 +661,8 @@ function renderActiveRow(tx, height) {
     <td class="mono cell-amount">${formatBTC(tx.amount_sats)}</td>
     <td>${tx.fee_rate > 0 ? tx.fee_rate + ' sat/vB' : '--'}</td>
     <td>${coinAge}</td>
-    <td class="cell-status">${badgeHTML(tx.status, tx.txid_full)}${locktimeLock(tx)}</td>
+    <td class="cell-status">${badgeHTML(tx.status, tx.txid_full)}</td>
+    <td class="cell-status-icon">${locktimeLock(tx)}</td>
     <td class="cell-target">${targetCell}</td>
     <td class="cell-actions">${buildActions(tx)}</td>
   </tr>`;
@@ -827,36 +830,42 @@ function badgeHTML(status, txid) {
 }
 
 function locktimeLock(tx) {
+  // Branch on locktime_category (set by backend); falls back to old behavior if absent.
+  const cat = tx.locktime_category;
+  if (!cat || cat === 'zero') return '';
   if (!tx.locktime) return '';
   const lt = tx.locktime;
-
-  // Only show if locktime is future
-  const height = currentStatus.current_height || 0;
-  const mtp = currentStatus.current_mtp || 0;
-
-  if (lt.type === 'timestamp' && mtp && mtp > lt.value) return '';
-  if (lt.type === 'block' && height && height >= lt.value) return '';
-
   const id = 'lock-' + tx.txid_full;
   const isPending = tx.status === 'pending';
-  const autoMsg = tx.status === 'scheduled'
-    ? (lang === 'es' ? ' — auto programada por nLockTime' : ' — auto-scheduled by nLockTime')
-    : '';
-  const clickMsg = isPending
-    ? (lang === 'es' ? '\nClick para programar a este nLockTime' : '\nClick to schedule at this nLockTime')
-    : '';
-  let detail;
-  if (lt.type === 'timestamp') {
-    detail = `nLockTime MTP: ${lt.date}${autoMsg}${clickMsg}`;
-  } else {
-    detail = `nLockTime ${lang === 'es' ? 'bloque' : 'block'}: ${lt.value.toLocaleString()}${autoMsg}${clickMsg}`;
+
+  if (cat === 'future') {
+    const autoMsg = tx.status === 'scheduled'
+      ? (lang === 'es' ? ' — auto programada por nLockTime' : ' — auto-scheduled by nLockTime')
+      : '';
+    const clickMsg = isPending
+      ? (lang === 'es' ? '\nClick para programar a este nLockTime' : '\nClick to schedule at this nLockTime')
+      : '';
+    const detail = lt.type === 'timestamp'
+      ? `nLockTime MTP: ${lt.date}${autoMsg}${clickMsg}`
+      : `nLockTime ${lang === 'es' ? 'bloque' : 'block'}: ${lt.value.toLocaleString()}${autoMsg}${clickMsg}`;
+    const handler = isPending
+      ? `clickLockIcon('${tx.txid_full}', '${id}', event)`
+      : `toggleTooltip(event,'${id}')`;
+    const cursor = isPending ? 'pointer' : 'help';
+    return `<span class="lock-icon" style="cursor:${cursor}" onclick="${handler}">&#128274;<span class="lock-detail" id="${id}">${detail}</span></span>`;
   }
 
-  const handler = isPending
-    ? `clickLockIcon('${tx.txid_full}', '${id}', event)`
-    : `toggleTooltip(event,'${id}')`;
-  const cursor = isPending ? 'pointer' : 'help';
-  return ` <span class="lock-icon" style="cursor:${cursor}" onclick="${handler}">&#128274;<span class="lock-detail" id="${id}">${detail}</span></span>`;
+  // present_past: tx leaves an on-chain fingerprint if broadcast as-is.
+  const ltStr = lt.type === 'timestamp'
+    ? lt.date
+    : (lang === 'es' ? 'bloque ' : 'block ') + lt.value.toLocaleString();
+  const detail = `${t('lockIconPastTip')}\nnLockTime: ${ltStr}`;
+  return `<span class="lock-icon lock-warn" style="cursor:help;color:var(--red,#e06060);opacity:1" onclick="toggleTooltip(event,'${id}')">&#9888;<span class="lock-detail" id="${id}">${detail}</span></span>`;
+}
+
+async function confirmPresentPastSchedule(tx) {
+  // Native confirm() for now; a custom modal can replace this in Bloque E.
+  return window.confirm(t('presentPastWarn'));
 }
 
 async function clickLockIcon(txid, tooltipId, event) {
@@ -971,6 +980,12 @@ async function schedule(txid) {
   const block = parseInt(input.value);
   if (!block) return;
 
+  // Double-confirm if tx has present/past locktime (fingerprint risk on chain)
+  const tx = currentData && currentData.txs.find(t => t.txid_full === txid);
+  if (tx && tx.locktime_category === 'present_past') {
+    if (!await confirmPresentPastSchedule(tx)) return;
+  }
+
   const height = currentStatus.current_height || 0;
 
   if (height && block <= height) {
@@ -990,6 +1005,10 @@ async function schedule(txid) {
 }
 
 async function broadcastNow(txid) {
+  const tx = currentData && currentData.txs.find(t => t.txid_full === txid);
+  if (tx && tx.locktime_category === 'present_past') {
+    if (!await confirmPresentPastSchedule(tx)) return;
+  }
   if (!confirm(t('emitConfirm'))) return;
   const result = await fetchJSON(`/api/txs/${txid}/broadcast-now`, { method: 'POST' });
   if (result.error) alert('Error: ' + result.error);
@@ -1036,40 +1055,7 @@ async function retryFailedTx(txid) {
   refresh();
 }
 
-async function autoAssign() {
-  const base = parseInt(document.getElementById('aa-base').value);
-  const offset = parseInt(document.getElementById('aa-offset').value) || 1;
-  if (!base) { alert(t('enterBase')); return; }
-
-  const result = await fetchJSON('/api/txs/auto-assign', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ base_block: base, offset }),
-  });
-  if (result.assigned !== undefined) refresh();
-}
-
 // --- Scan dependencies ---
-
-async function rescanAll() {
-  const btn = document.getElementById('btn-rescan');
-  btn.style.opacity = '0.5';
-  btn.disabled = true;
-
-  const [deps] = await Promise.all([
-    fetchJSON('/api/txs/scan-dependencies', { method: 'POST' }),
-    fetchJSON('/api/txs/resolve-inputs', { method: 'POST' }),
-  ]);
-
-  btn.style.opacity = '1';
-  btn.disabled = false;
-
-  const msg = lang === 'es'
-    ? `Escaneo completo. ${deps.found} dependencias detectadas.`
-    : `Scan complete. ${deps.found} dependencies detected.`;
-  alert(msg);
-  refresh();
-}
 
 // --- Import ---
 
@@ -1128,7 +1114,7 @@ function showDatePicker(txid) {
   const row = document.getElementById('blk-' + txid).closest('tr');
   const picker = document.createElement('tr');
   picker.id = 'datepicker-' + txid;
-  picker.innerHTML = `<td colspan="9" style="background:var(--bg-card);padding:12px;border-bottom:1px solid var(--border)">
+  picker.innerHTML = `<td colspan="10" style="background:var(--bg-card);padding:12px;border-bottom:1px solid var(--border)">
     <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap;justify-content:flex-end">
       ${mtpButton}
       <span style="border-left:1px solid var(--border);height:20px" ${hasTimestampLock ? '' : 'hidden'}></span>
@@ -1143,6 +1129,10 @@ function showDatePicker(txid) {
 }
 
 async function scheduleAtMtp(txid) {
+  const tx = currentData && currentData.txs.find(t => t.txid_full === txid);
+  if (tx && tx.locktime_category === 'present_past') {
+    if (!await confirmPresentPastSchedule(tx)) return;
+  }
   const result = await fetchJSON(`/api/txs/${txid}/schedule-mtp`, { method: 'POST' });
   const picker = document.getElementById('datepicker-' + txid);
   if (picker) picker.remove();
@@ -1410,17 +1400,15 @@ async function loadSettingsTab() {
   // Preferences
   document.getElementById('set-lang').value = lang;
   document.getElementById('set-unit').value = unit;
-  document.getElementById('set-auto-locktime').checked = s.auto_schedule_locktime !== false;
+  // Checkbox semantics are inverted: checked = user opted OUT (feature still ON by default)
+  document.getElementById('set-auto-locktime').checked = s.auto_schedule_locktime === false;
   const lianaOffset = s.liana_height_offset || 0;
-  const lianaRate = s.liana_increment_rate || 0;
+  const lianaBump = s.liana_increment_blocks_per_tx || 1000;
   const lianaDisableAt = s.liana_disable_at_height || 0;
-  const lianaEnabled = lianaOffset > 0 || lianaRate > 0;
+  const lianaEnabled = lianaOffset > 0;
   document.getElementById('set-liana-enabled').checked = lianaEnabled;
   document.getElementById('set-liana-offset').value = lianaOffset;
-  // Slider min is 5: clamp displayed value (saved 0 means "paused"; show as 5 visually)
-  const rateForSlider = lianaRate >= 5 ? lianaRate : 10;
-  document.getElementById('set-liana-increment').value = rateForSlider;
-  updateLianaIncrementValue(rateForSlider);
+  document.getElementById('set-liana-bump').value = lianaBump;
   updateLianaDisableAtDisplay(lianaDisableAt, currentStatus && currentStatus.current_height);
   updateLianaEnabledLabel(lianaDisableAt);
   toggleLianaFake(lianaEnabled);
@@ -1593,11 +1581,6 @@ function unlockNpubField() {
   document.getElementById('npub-status').textContent = '';
 }
 
-function updateAaSuffix() {
-  const val = parseInt(document.getElementById('aa-offset').value) || 0;
-  document.getElementById('lbl-aa-suffix').textContent = val === 1 ? t('aaSuffix1') : t('aaSuffixN');
-}
-
 // --- Wallet connection info ---
 
 function loadConnectInfo(status) {
@@ -1746,10 +1729,11 @@ function savePrefUnit(val) {
 }
 
 function savePrefAutoLocktime(checked) {
+  // Checkbox is "Desactivar auto-agendado" → checked means feature OFF (auto_schedule_locktime=false)
   fetchJSON('/api/preferences', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ auto_schedule_locktime: checked }),
+    body: JSON.stringify({ auto_schedule_locktime: !checked }),
   });
 }
 
@@ -1774,18 +1758,15 @@ function saveLianaOffset(val) {
   });
 }
 
-function saveLianaIncrement(val) {
-  const rate = parseInt(val) || 0;
+function saveLianaBump(val) {
+  let bump = parseInt(val) || 1000;
+  bump = Math.max(1, Math.min(bump, 10000));
+  document.getElementById('set-liana-bump').value = bump;
   fetchJSON('/api/preferences', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ liana_increment_rate: rate }),
+    body: JSON.stringify({ liana_increment_blocks_per_tx: bump }),
   });
-}
-
-function updateLianaIncrementValue(val) {
-  const v = parseInt(val) || 0;
-  document.getElementById('set-liana-increment-value').textContent = v + 's';
 }
 
 function updateLianaEnabledLabel(disableAt) {
@@ -1820,25 +1801,19 @@ function updateLianaDisableAtDisplay(disableAt, currentHeight) {
 function toggleLianaFake(enabled) {
   const config = document.getElementById('liana-fake-config');
   const offsetInput = document.getElementById('set-liana-offset');
-  const incrementInput = document.getElementById('set-liana-increment');
+  const bumpInput = document.getElementById('set-liana-bump');
+  config.classList.toggle('is-disabled', !enabled);
   if (enabled) {
-    config.style.opacity = '1';
-    config.style.pointerEvents = 'auto';
     offsetInput.disabled = false;
-    incrementInput.disabled = false;
+    bumpInput.disabled = false;
   } else {
-    config.style.opacity = '0.4';
-    config.style.pointerEvents = 'none';
     offsetInput.disabled = true;
-    incrementInput.disabled = true;
+    bumpInput.disabled = true;
     // Reset to 0 when disabled; backend will clear disable_at automatically
     offsetInput.value = 0;
-    incrementInput.value = 10;
-    updateLianaIncrementValue(10);
     updateLianaDisableAtDisplay(0, 0);
     updateLianaOffsetLabel(0);
     saveLianaOffset(0);
-    saveLianaIncrement(0);
   }
 }
 
@@ -1924,7 +1899,7 @@ function showPricePicker(txid) {
   const defaultExpiry = new Date(Date.now() + 7 * 86400000);
   const expiryStr = defaultExpiry.toISOString().slice(0, 16);
 
-  picker.innerHTML = `<td colspan="9" style="background:var(--bg-card);padding:12px;border-bottom:1px solid var(--border)">
+  picker.innerHTML = `<td colspan="10" style="background:var(--bg-card);padding:12px;border-bottom:1px solid var(--border)">
     <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap;justify-content:flex-end">
       <label style="font-size:13px;color:var(--text-muted)">${t('priceSchedule')}</label>
       <select id="price-dir-${txid}" class="inline-edit" style="width:auto;padding:4px 8px">
@@ -1944,6 +1919,10 @@ function showPricePicker(txid) {
 }
 
 async function scheduleByPrice(txid) {
+  const tx = currentData && currentData.txs.find(t => t.txid_full === txid);
+  if (tx && tx.locktime_category === 'present_past') {
+    if (!await confirmPresentPastSchedule(tx)) return;
+  }
   const price = parseFloat(document.getElementById('price-val-' + txid).value);
   const dir = document.getElementById('price-dir-' + txid).value;
   const expiryInput = document.getElementById('price-exp-' + txid).value;
@@ -2119,12 +2098,13 @@ let _importParsedFile = null;
 let _importDecryptedPayload = null;
 
 function openExportModal() {
-  document.getElementById('pool-modal-overlay').style.display = 'flex';
+  document.getElementById('pool-modal-overlay').classList.add('is-open');
   document.getElementById('pool-modal-export').style.display = '';
   document.getElementById('pool-modal-import').style.display = 'none';
-  document.getElementById('export-modal-error').style.display = 'none';
+  document.getElementById('export-modal-error').classList.remove('is-visible');
   document.getElementById('export-passphrase').value = '';
   document.getElementById('export-passphrase-confirm').value = '';
+  document.getElementById('export-none-ack').checked = false;
   document.querySelector('input[name="export-method"][value="passphrase"]').checked = true;
   updateExportMethod();
   applyExportImportI18n();
@@ -2134,10 +2114,10 @@ function openExportModal() {
 }
 
 function openImportModal() {
-  document.getElementById('pool-modal-overlay').style.display = 'flex';
+  document.getElementById('pool-modal-overlay').classList.add('is-open');
   document.getElementById('pool-modal-export').style.display = 'none';
   document.getElementById('pool-modal-import').style.display = '';
-  document.getElementById('import-modal-error').style.display = 'none';
+  document.getElementById('import-modal-error').classList.remove('is-visible');
   document.getElementById('import-step-pick').style.display = '';
   document.getElementById('import-step-review').style.display = 'none';
   document.getElementById('import-file').value = '';
@@ -2159,20 +2139,19 @@ function closePoolModal(e) {
     const el = document.getElementById(id);
     if (el) el.value = '';
   });
-  document.getElementById('pool-modal-overlay').style.display = 'none';
+  document.getElementById('pool-modal-overlay').classList.remove('is-open');
 }
 
 function applyExportImportI18n() {
   const setText = (id, key) => { const el = document.getElementById(id); if (el) el.textContent = t(key); };
-  setText('set-title-backup', 'setTitleBackup');
-  setText('set-backup-help', 'setBackupHelp');
-  setText('btn-pool-export', 'poolExport');
-  setText('btn-pool-import', 'poolImport');
   setText('export-modal-title', 'exportModalTitle');
   setText('export-modal-help', 'exportModalHelp');
   setText('export-method-passphrase', 'exportMethodPassphrase');
   setText('export-method-nip44', 'exportMethodNip44');
+  setText('export-method-none', 'exportMethodNone');
   setText('export-passphrase-warn', 'exportPassphraseWarn');
+  setText('export-none-warn', 'exportNoneWarn');
+  setText('export-none-ack-label', 'exportNoneAck');
   setText('export-nip44-help', 'exportNip44Help');
   setText('export-modal-cancel', 'btnCancel');
   setText('export-modal-submit', 'btnDownload');
@@ -2194,17 +2173,20 @@ function updateExportMethod() {
   const method = document.querySelector('input[name="export-method"]:checked').value;
   document.getElementById('export-passphrase-fields').style.display = method === 'passphrase' ? '' : 'none';
   document.getElementById('export-nip44-fields').style.display = method === 'nip44' ? '' : 'none';
+  document.getElementById('export-none-fields').style.display = method === 'none' ? '' : 'none';
+  // Reset the ack checkbox when switching away from "none"
+  if (method !== 'none') document.getElementById('export-none-ack').checked = false;
 }
 
 function _showExportError(msg) {
   const el = document.getElementById('export-modal-error');
   el.textContent = msg;
-  el.style.display = '';
+  el.classList.add('is-visible');
 }
 
 async function doExport() {
   const method = document.querySelector('input[name="export-method"]:checked').value;
-  document.getElementById('export-modal-error').style.display = 'none';
+  document.getElementById('export-modal-error').classList.remove('is-visible');
   const submitBtn = document.getElementById('export-modal-submit');
   submitBtn.disabled = true;
   const originalText = submitBtn.textContent;
@@ -2226,6 +2208,11 @@ async function doExport() {
     // Clear DOM inputs immediately so the password manager doesn't snapshot them
     document.getElementById('export-passphrase').value = '';
     document.getElementById('export-passphrase-confirm').value = '';
+  } else if (method === 'none') {
+    if (!document.getElementById('export-none-ack').checked) {
+      _showExportError(t('exportNoneAckRequired'));
+      submitBtn.disabled = false; submitBtn.textContent = originalText; return;
+    }
   }
 
   try {
@@ -2249,8 +2236,6 @@ async function doExport() {
     a.href = url; a.download = filename;
     document.body.appendChild(a); a.click(); a.remove();
     URL.revokeObjectURL(url);
-    document.getElementById('pool-backup-status').textContent =
-      (lang === 'es' ? 'Exportadas ' : 'Exported ') + txCount + ' tx';
     closePoolModal();
   } catch (e) {
     _showExportError(String(e));
@@ -2260,7 +2245,7 @@ async function doExport() {
 }
 
 async function onImportFileChosen(input) {
-  document.getElementById('import-modal-error').style.display = 'none';
+  document.getElementById('import-modal-error').classList.remove('is-visible');
   document.getElementById('import-plan-submit').disabled = true;
   const file = input.files && input.files[0];
   if (!file) return;
@@ -2293,11 +2278,11 @@ async function onImportFileChosen(input) {
 function _showImportError(msg) {
   const el = document.getElementById('import-modal-error');
   el.textContent = msg;
-  el.style.display = '';
+  el.classList.add('is-visible');
 }
 
 async function doImportPlan() {
-  document.getElementById('import-modal-error').style.display = 'none';
+  document.getElementById('import-modal-error').classList.remove('is-visible');
   if (!_importParsedFile) return;
   const submitBtn = document.getElementById('import-plan-submit');
   submitBtn.disabled = true;
@@ -2363,7 +2348,7 @@ function _renderImportSummary(plan, planBody) {
 }
 
 async function doImportApply() {
-  document.getElementById('import-modal-error').style.display = 'none';
+  document.getElementById('import-modal-error').classList.remove('is-visible');
   const submitBtn = document.getElementById('import-apply-submit');
   submitBtn.disabled = true;
   try {
@@ -2408,8 +2393,6 @@ async function doImportApply() {
 }
 
 function _finishImport(result) {
-  const msg = t('importDone').replace('{n}', result.added || 0).replace('{s}', result.skipped || 0);
-  document.getElementById('pool-backup-status').textContent = msg;
   closePoolModal();
   refresh();
 }

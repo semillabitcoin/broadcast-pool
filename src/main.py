@@ -41,9 +41,11 @@ async def main():
     if not config.APP_SEED:
         log.warning("APP_SEED not set — transaction encryption DISABLED")
 
-    # Create components
+    # Create components — proxy and scheduler reference each other, so wire scheduler
+    # into proxy after both exist (proxy is built first because Scheduler needs it).
     proxy = ProxyServer(store)
     scheduler = Scheduler(store, notify_callback=proxy.notify_all_sessions, proxy_server=proxy)
+    proxy.set_scheduler(scheduler)
     web_app = create_app(store, proxy_server=proxy, scheduler=scheduler)
 
     # Start proxy

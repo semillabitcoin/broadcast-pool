@@ -3,7 +3,7 @@
 import logging
 
 from src.pool.store import TxStore
-from src.pool.tx_parser import ParsedTx, parse_raw_tx, compute_scripthash
+from src.pool.tx_parser import LOCKTIME_TIMESTAMP_THRESHOLD, ParsedTx, parse_raw_tx, compute_scripthash
 from src.pool.virtual_mempool import VirtualMempool
 from src.proxy.upstream import UpstreamConnection
 
@@ -13,11 +13,22 @@ log = logging.getLogger(__name__)
 class Interceptor:
     """Intercepts specific Electrum methods while proxying the rest."""
 
-    def __init__(self, store: TxStore, vmempool: VirtualMempool, upstream: UpstreamConnection):
+    def __init__(
+        self,
+        store: TxStore,
+        vmempool: VirtualMempool,
+        upstream: UpstreamConnection,
+        on_fake_bump=None,
+        scheduler=None,
+    ):
         self.store = store
         self.vmempool = vmempool
         self.upstream = upstream
         self.wallet_label: str = ""  # Set by session from server.version handshake
+        # async callable(bump_blocks: int) — fired when a retained tx hits the current fake tip
+        self.on_fake_bump = on_fake_bump
+        # Scheduler reference for post-arrival CPFP rescan. Optional (tests pass None).
+        self.scheduler = scheduler
 
     async def intercept_broadcast(self, params: list, msg_id: int) -> dict:
         """Intercept blockchain.transaction.broadcast — retain instead of forwarding."""
@@ -55,11 +66,53 @@ class Interceptor:
         # Save to store
         self.store.save_retained_tx(parsed, raw_hex, wallet_label=self.wallet_label)
 
-        # If dependency detected, record it
+        # Faker bump trigger: if this tx's locktime hits the current fake tip,
+        # advance the offset by liana_increment_blocks_per_tx blocks and notify
+        # every Liana session so all wallets see the new tip. Only block-locktime
+        # txs are considered (timestamp locktimes don't drive the fake chain).
+        if 0 < parsed.locktime < LOCKTIME_TIMESTAMP_THRESHOLD:
+            try:
+                offset = int(self.store.get_state("liana_height_offset") or "0")
+            except ValueError:
+                offset = 0
+            real_tip = self.store.get_current_height() or 0
+            if offset > 0 and real_tip > 0 and parsed.locktime == real_tip + offset:
+                try:
+                    bump = int(self.store.get_state("liana_increment_blocks_per_tx") or "1000")
+                except ValueError:
+                    bump = 1000
+                bump = max(1, min(bump, 10000))
+                new_offset = min(offset + bump, 70000)
+                actual_bump = new_offset - offset
+                if actual_bump > 0:
+                    self.store.set_state("liana_height_offset", str(new_offset))
+                    log.info(
+                        "Faker bump: tx %s hit fake tip %d, advancing offset %d→%d (+%d)",
+                        parsed.txid[:16], parsed.locktime, offset, new_offset, actual_bump,
+                    )
+                    if self.on_fake_bump:
+                        try:
+                            await self.on_fake_bump(actual_bump)
+                        except Exception as e:
+                            log.warning("Faker bump fan-out failed: %s", e)
+
+        # If dependency detected, record it (case: new tx is CHILD of existing retained)
         if parent_tx and not replaced_tx:
             self.store.set_depends_on(parsed.txid, parent_tx.txid)
             log.info("Dependency detected: %s depends on %s (CPFP)",
                      parsed.txid[:16], parent_tx.txid[:16])
+
+        # Re-scan all active txs in the opposite direction: this new tx may turn out
+        # to be the PARENT of a previously imported tx whose dependency couldn't be
+        # established at import time (e.g. parent arrived after child during a batch
+        # migration). _detect_dependency only checks the "new child" direction.
+        if self.scheduler:
+            try:
+                found = self.scheduler._scan_dependencies()
+                if found:
+                    log.info("Post-arrival dep scan: %d new CPFP relationship(s) detected", found)
+            except Exception as e:
+                log.debug("Post-arrival dep scan failed: %s", e)
 
         # If RBF detected, mark old tx as replaced and inherit its schedule
         if replaced_tx:
@@ -83,7 +136,7 @@ class Interceptor:
 
         auto_lock = self.store.get_state("auto_schedule_locktime") != "false"
 
-        if parsed.locktime >= 500_000_000 and auto_lock:
+        if parsed.locktime >= LOCKTIME_TIMESTAMP_THRESHOLD and auto_lock:
             # Unix timestamp locktime — mark as scheduled, scheduler will broadcast when MTP passes
             from datetime import datetime
             dt = datetime.utcfromtimestamp(parsed.locktime).strftime("%Y-%m-%d %H:%M UTC")
@@ -92,7 +145,7 @@ class Interceptor:
                 "Retained tx %s with timestamp locktime=%d (%s, %.1f sat/vB) — scheduled for MTP",
                 parsed.txid[:16], parsed.locktime, dt, parsed.fee_rate,
             )
-        elif (0 < parsed.locktime < 500_000_000
+        elif (0 < parsed.locktime < LOCKTIME_TIMESTAMP_THRESHOLD
                 and parsed.locktime > max(current_height, 1) + 1
                 and auto_lock):
             # Real future block height locktime — auto-schedule

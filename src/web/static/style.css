@@ -15,6 +15,18 @@
   --mainnet: #ff9900;
   --signet: #8e44ad;
   --testnet: #2ecc71;
+  /* Spacing scale */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
+  /* Border radius */
+  --radius-sm: 4px;
+  --radius-md: 6px;
+  --radius-lg: 8px;
+  /* Input height */
+  --input-h: 32px;
 }
 
 body {
@@ -38,18 +50,199 @@ h1 { font-size: 24px; font-weight: 600; margin-bottom: 4px; }
 .tab-content { display: none; }
 .tab-content.active { display: block; }
 
-/* Settings */
-.settings-section { background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: 20px; margin-bottom: 16px; }
-.settings-title { font-size: 15px; font-weight: 600; margin: 0 0 12px 0; }
-.settings-row { display: flex; align-items: center; gap: 12px; margin-bottom: 10px; }
-.settings-label { font-size: 13px; color: var(--text-muted); min-width: 60px; }
-.settings-help { font-size: 12px; color: var(--text-muted); margin-bottom: 12px; line-height: 1.5; }
-.settings-actions { margin-top: 8px; }
+/* Settings — refactored to use design tokens */
+.settings-section {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: var(--space-5);
+  margin-bottom: var(--space-4);
+}
+.settings-title {
+  font-size: 15px;
+  font-weight: 600;
+  margin: 0 0 var(--space-4) 0;
+  color: var(--text);
+}
+.settings-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  margin-bottom: var(--space-3);
+  min-height: var(--input-h);
+  flex-wrap: wrap;
+}
+.settings-row:last-child { margin-bottom: 0; }
+.settings-label {
+  font-size: 13px;
+  color: var(--text-muted);
+  min-width: 130px;
+  flex-shrink: 0;
+}
+.settings-help {
+  font-size: 12px;
+  color: var(--text-muted);
+  margin-bottom: var(--space-4);
+  line-height: 1.55;
+  max-width: 70ch;
+}
+.settings-actions { margin-top: var(--space-2); }
 .connected-label { font-size: 13px; color: var(--green); }
-.behavior-item { display: flex; gap: 8px; margin-bottom: 10px; }
-.behavior-bullet { color: var(--text-muted); font-size: 16px; line-height: 1.4; flex-shrink: 0; }
-.behavior-subtitle { font-size: 13px; color: var(--text); display: block; margin-bottom: 4px; }
-.behavior-item > div > *:not(.behavior-subtitle) { margin-left: 18px; }
+
+/* Sub-sections inside a settings section (e.g., Behavior > Liana/Price/Locktime) */
+.settings-subsection {
+  display: block;
+  margin-bottom: var(--space-4);
+  padding-left: var(--space-4);
+  border-left: 2px solid var(--border);
+}
+.settings-subsection:last-child { margin-bottom: 0; }
+.settings-subsection-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+  display: block;
+  margin-bottom: var(--space-2);
+}
+
+/* Backward-compat aliases (old HTML still references these) */
+.behavior-item { display: block; margin-bottom: var(--space-4); padding-left: var(--space-4); border-left: 2px solid var(--border); }
+.behavior-bullet { display: none; }
+.behavior-subtitle { font-size: 13px; font-weight: 600; color: var(--text); display: block; margin-bottom: var(--space-2); }
+
+/* Disabled state — opacity + no interaction without inline styles */
+.is-disabled { opacity: 0.4; pointer-events: none; }
+
+/* Input width modifiers (apply alongside .inline-edit) */
+.input-sm { width: 80px; }
+.input-md { width: 140px; }
+.input-lg { width: 280px; }
+.input-xl { width: 100%; max-width: 520px; }
+.input-mono { font-family: 'SF Mono','Fira Code',monospace; font-size: 12px; }
+
+/* Checkbox row helper */
+.checkbox-row { display: flex; align-items: center; gap: var(--space-2); font-size: 13px; cursor: pointer; }
+
+/* Modal system (reusable beyond pool export/import) */
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.6);
+  z-index: 1000;
+  display: none;
+  align-items: center;
+  justify-content: center;
+}
+.modal-backdrop.is-open { display: flex; }
+.modal-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  padding: var(--space-5);
+  border-radius: var(--radius-lg);
+  max-width: 520px;
+  width: 90%;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+}
+.modal-card h3 { margin: 0 0 var(--space-3) 0; font-size: 16px; font-weight: 600; }
+.modal-card-help { font-size: 13px; color: var(--text-muted); margin: 0 0 var(--space-4); line-height: 1.5; }
+.modal-card-actions {
+  display: flex;
+  gap: var(--space-2);
+  justify-content: flex-end;
+  margin-top: var(--space-5);
+  padding-top: var(--space-4);
+  border-top: 1px solid var(--border);
+}
+.modal-error {
+  margin-top: var(--space-3);
+  font-size: 12px;
+  color: var(--red);
+  display: none;
+}
+.modal-error.is-visible { display: block; }
+
+/* Vertical stack with consistent gap — for form fields inside modals */
+.form-stack {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  margin-bottom: var(--space-3);
+}
+.form-stack:last-child { margin-bottom: 0; }
+
+/* Radio group as a vertical list of options */
+.radio-stack {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin-bottom: var(--space-4);
+  padding: var(--space-3);
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+}
+.radio-stack .checkbox-row {
+  padding: var(--space-1) 0;
+}
+.radio-stack .checkbox-row input[type="radio"] {
+  margin: 0 var(--space-1) 0 0;
+}
+
+/* Styled file input (the native one is ugly on dark themes) */
+.file-input {
+  display: block;
+  width: 100%;
+  padding: var(--space-3);
+  background: var(--bg);
+  border: 1px dashed var(--border);
+  border-radius: var(--radius-md);
+  color: var(--text-muted);
+  font-size: 13px;
+  cursor: pointer;
+}
+.file-input:hover { border-color: var(--blue); }
+.file-input::-webkit-file-upload-button {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  color: var(--text);
+  padding: var(--space-1) var(--space-3);
+  border-radius: var(--radius-sm);
+  margin-right: var(--space-3);
+  font-size: 12px;
+  cursor: pointer;
+}
+.file-input::-webkit-file-upload-button:hover { background: var(--bg-hover); }
+
+/* Small inline warn for passphrase (inside a form-stack) */
+.form-note {
+  font-size: 11px;
+  color: var(--text-muted);
+  margin: calc(var(--space-2) * -1) 0 0;
+  line-height: 1.4;
+}
+.form-note strong { color: var(--orange); font-weight: 600; }
+
+/* Soft warning alert (less aggressive than .alert) */
+.alert-soft {
+  font-size: 12px;
+  padding: var(--space-3);
+  background: rgba(248, 81, 73, 0.08);
+  border-left: 3px solid var(--red);
+  border-radius: var(--radius-sm);
+  margin: 0 0 var(--space-3);
+  line-height: 1.5;
+}
+
+/* Inline keyboard / code value display */
+.kbd-mono {
+  font-family: 'SF Mono','Fira Code',monospace;
+  font-size: 13px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: var(--space-2) var(--space-3);
+  user-select: all;
+}
 
 /* Server cards */
 .server-card {
@@ -230,19 +423,24 @@ button:disabled { opacity: 0.4; cursor: not-allowed; }
   50% { opacity: 0.6; }
 }
 
-/* Inline edit */
+/* Inline edit — base style; width is configured via .input-sm/md/lg/xl modifiers */
 .inline-edit {
   background: var(--bg);
   border: 1px solid var(--border);
   color: var(--text);
-  padding: 4px 8px;
-  border-radius: 4px;
+  padding: var(--space-1) var(--space-2);
+  border-radius: var(--radius-sm);
   width: 90px;
+  height: var(--input-h);
   font-size: 13px;
   font-family: inherit;
+  box-sizing: border-box;
 }
 .inline-edit:focus { border-color: var(--blue); outline: none; }
 .inline-edit::-webkit-calendar-picker-indicator { filter: invert(0.7); }
+.inline-edit:disabled { cursor: not-allowed; }
+/* Selects need a bit more breathing room */
+select.inline-edit { padding-right: var(--space-3); height: var(--input-h); }
 
 /* Target block cell */
 .cell-target { min-width: 170px; position: relative; }
@@ -311,18 +509,24 @@ button:disabled { opacity: 0.4; cursor: not-allowed; }
 .target-cal, .target-price-btn { filter: grayscale(1); }
 .target-cal:hover, .target-price-btn:hover { filter: none; }
 
-/* Locktime lock */
-.cell-status { position: relative; }
+/* Locktime lock lives in its own narrow column so status badges stay aligned across rows */
+.cell-status { white-space: nowrap; }
+.cell-status-icon, .col-status-icon {
+  width: 28px;
+  min-width: 28px;
+  text-align: center;
+  padding-left: 0 !important;
+  padding-right: 0 !important;
+}
 .lock-icon {
   cursor: pointer;
-  font-size: 11px;
-  position: absolute;
-  right: 4px;
-  top: 50%;
-  transform: translateY(-50%);
-  opacity: 0.5;
+  font-size: 12px;
+  display: inline-block;
+  opacity: 0.7;
+  vertical-align: middle;
 }
 .lock-icon:hover { opacity: 1; }
+.lock-icon.lock-warn { color: var(--red); opacity: 1; }
 .badge-clickable { cursor: pointer; }
 .badge-clickable:hover { filter: brightness(1.2); }
 .dep-arrow { color: var(--text-muted); }
@@ -355,7 +559,6 @@ button:disabled { opacity: 0.4; cursor: not-allowed; }
 .amt-dot { }
 .amt-dec { text-align: left; }
 .amt-unit { color: var(--text-muted); font-size: 11px; margin-left: 4px; }
-.cell-status { position: relative; }
 .cell-actions { white-space: nowrap; text-align: center; }
 
 /* Alerts */
@@ -415,7 +618,19 @@ button:disabled { opacity: 0.4; cursor: not-allowed; }
 .bp-footer a:hover { text-decoration: underline; }
 .bp-footer p { margin: 4px 0; }
 
-/* Responsive */
+/* Responsive — tablet: drop "Tipo" (col 2) and "Wallet" (col 3) */
+@media (max-width: 1024px) {
+  .tx-table th:nth-child(2),
+  .tx-table td:nth-child(2),
+  .tx-table th:nth-child(3),
+  .tx-table td:nth-child(3) {
+    display: none;
+  }
+  /* No horizontal scroll needed at this width with 7 columns */
+  #tx-container, #confirmed-section, #vault-content { overflow-x: visible; }
+}
+
+/* Responsive — mobile: also drop "Fee rate" (col 5) and "Edad moneda" (col 6) */
 @media (max-width: 768px) {
   body { padding: 12px; }
   h1 { font-size: 20px; }
@@ -428,27 +643,36 @@ button:disabled { opacity: 0.4; cursor: not-allowed; }
   }
   .status-value { font-size: 16px; }
   .status-label { font-size: 10px; }
-  .actions-bar { font-size: 12px; gap: 8px; }
-  .actions-bar input[type="number"] { width: 80px; font-size: 13px; padding: 4px 8px; }
+  .actions-bar { font-size: 12px; gap: 8px; flex-wrap: wrap; }
+  .actions-bar button { font-size: 12px; padding: 6px 10px; }
 
-  /* Horizontal scroll for tables */
+  .tx-table { font-size: 12px; table-layout: auto; }
+  .tx-table th, .tx-table td { padding: 6px 8px; white-space: nowrap; }
+  .tx-table th:nth-child(5),
+  .tx-table td:nth-child(5),
+  .tx-table th:nth-child(6),
+  .tx-table td:nth-child(6) {
+    display: none;
+  }
+  /* Re-enable horizontal scroll as a last-resort safety net */
   #tx-container, #confirmed-section, #vault-content {
     overflow-x: auto;
     -webkit-overflow-scrolling: touch;
   }
-  .tx-table { font-size: 12px; table-layout: auto; min-width: 700px; }
-  .tx-table th, .tx-table td { padding: 6px 8px; white-space: nowrap; }
-  .tx-table .col-txid { width: auto; }
-  .tx-table .col-type { width: auto; }
-  .tx-table .col-wallet { width: auto; }
-  .tx-table .col-amount { width: auto; }
-  .tx-table .col-feerate { width: auto; }
-  .tx-table .col-age { width: auto; }
-  .tx-table .col-status { width: auto; }
-  .tx-table .col-target { width: auto; }
-  .tx-table .col-actions { width: auto; }
 
   /* Settings sections */
   .settings-row { flex-wrap: wrap; gap: 8px; }
+  .settings-label { min-width: 100px; }
   .server-card { padding: 6px 10px; }
+  .modal-card { padding: var(--space-4); max-width: 95%; }
+}
+
+/* Very narrow: hide TxID column too — pool becomes Monto + Estado + Retransmitir + Acciones */
+@media (max-width: 480px) {
+  .tx-table th:nth-child(1),
+  .tx-table td:nth-child(1) {
+    display: none;
+  }
+  .tx-table { font-size: 11px; }
+  .tx-table th, .tx-table td { padding: 4px 6px; }
 }

@@ -1,6 +1,7 @@
 """Web API — REST endpoints + static file serving."""
 
 import asyncio
+import hashlib
 import json
 import logging
 import os
@@ -76,7 +77,6 @@ def create_app(store: TxStore, proxy_server=None, scheduler=None) -> web.Applica
     app.router.add_post("/api/txs/{txid}/auto-schedule-locktime", handle_auto_schedule_locktime)
     app.router.add_post("/api/txs/{txid}/unschedule", handle_unschedule)
     app.router.add_post("/api/txs/{txid}/retry", handle_retry)
-    app.router.add_post("/api/txs/auto-assign", handle_auto_assign)
     app.router.add_post("/api/txs/import", handle_import_tx)
     app.router.add_get("/api/status", handle_status)
     app.router.add_get("/api/settings", handle_get_settings)
@@ -130,7 +130,7 @@ def _classify_tx(tx) -> list[str]:
     return tags if tags else []
 
 
-LOCKTIME_TIMESTAMP_THRESHOLD = 500_000_000  # nLockTime >= this is a unix timestamp
+from src.pool.tx_parser import LOCKTIME_TIMESTAMP_THRESHOLD
 
 
 def _auto_schedule_by_locktime(store: TxStore, txid: str) -> dict:
@@ -162,7 +162,27 @@ def _auto_schedule_by_locktime(store: TxStore, txid: str) -> dict:
     return {"scheduled": False, "reason": "locktime not in future"}
 
 
-def _tx_to_dict(tx, current_height: int = 0, store: TxStore = None) -> dict:
+def _classify_locktime(tx, current_height: int, current_mtp: int) -> str:
+    """Bucket a tx by its nLockTime relative to the current chain tip.
+
+    Returns one of: "zero" | "future" | "present_past".
+    "present_past" includes the Sparrow anti-fee-sniping case (locktime == height+1)
+    because that locktime is not a real lock — broadcasting it would leave a fingerprint.
+    """
+    lt = tx.locktime or 0
+    if lt <= 0:
+        return "zero"
+    if lt >= LOCKTIME_TIMESTAMP_THRESHOLD:
+        if current_mtp and current_mtp >= lt:
+            return "present_past"
+        return "future"
+    # Block-height locktime
+    if current_height and lt <= current_height + 1:
+        return "present_past"
+    return "future"
+
+
+def _tx_to_dict(tx, current_height: int = 0, store: TxStore = None, current_mtp: int = 0) -> dict:
     blocks_remaining = None
     if tx.target_block and current_height:
         blocks_remaining = max(0, tx.target_block - current_height)
@@ -186,7 +206,7 @@ def _tx_to_dict(tx, current_height: int = 0, store: TxStore = None) -> dict:
     # Locktime info
     locktime_info = None
     if tx.locktime > 0:
-        if tx.locktime >= 500_000_000:
+        if tx.locktime >= LOCKTIME_TIMESTAMP_THRESHOLD:
             from datetime import datetime, timezone
             dt = datetime.fromtimestamp(tx.locktime, tz=timezone.utc)
             locktime_info = {
@@ -207,6 +227,7 @@ def _tx_to_dict(tx, current_height: int = 0, store: TxStore = None) -> dict:
         "input_count": tx.input_count,
         "output_count": tx.output_count,
         "locktime": locktime_info,
+        "locktime_category": _classify_locktime(tx, current_height, current_mtp),
         "depends_on": depends_on_info,
         "amount_sats": tx.amount_sats,
         "fee_sats": tx.fee_sats,
@@ -234,9 +255,10 @@ async def handle_list_txs(request: web.Request) -> web.Response:
     status_filter = request.query.get("status")
     txs = store.get_all_txs(status=status_filter)
     current_height = store.get_current_height()
+    current_mtp = int(store.get_state("current_mtp") or "0")
 
     data = {
-        "txs": [_tx_to_dict(tx, current_height, store) for tx in txs],
+        "txs": [_tx_to_dict(tx, current_height, store, current_mtp) for tx in txs],
         "current_height": current_height,
         "total_pending": sum(1 for t in txs if t.status == "pending"),
         "total_scheduled": sum(1 for t in txs if t.status == "scheduled"),
@@ -252,7 +274,8 @@ async def handle_get_tx(request: web.Request) -> web.Response:
         return web.json_response({"error": "Not found"}, status=404)
 
     current_height = store.get_current_height()
-    data = _tx_to_dict(tx, current_height, store)
+    current_mtp = int(store.get_state("current_mtp") or "0")
+    data = _tx_to_dict(tx, current_height, store, current_mtp)
     data["raw_hex"] = tx.raw_hex
     data["inputs"] = [
         {"prev_txid": i.prev_txid, "prev_vout": i.prev_vout, "value_sats": i.value_sats}
@@ -286,7 +309,7 @@ async def handle_schedule(request: web.Request) -> web.Response:
     try:
         parsed = parse_raw_tx(tx.raw_hex)
         current_height = store.get_current_height()
-        is_real_locktime = (0 < parsed.locktime < 500_000_000
+        is_real_locktime = (0 < parsed.locktime < LOCKTIME_TIMESTAMP_THRESHOLD
                            and current_height > 0
                            and parsed.locktime > current_height + 1)
         if is_real_locktime and target_block < parsed.locktime:
@@ -320,7 +343,7 @@ async def handle_schedule_mtp(request: web.Request) -> web.Response:
         return web.json_response({"error": "Not found"}, status=404)
     if tx.status not in ("pending", "scheduled"):
         return web.json_response({"error": f"Cannot schedule tx in status '{tx.status}'"}, status=400)
-    if tx.locktime < 500_000_000:
+    if tx.locktime < LOCKTIME_TIMESTAMP_THRESHOLD:
         return web.json_response({"error": "This tx does not have a timestamp locktime"}, status=400)
 
     # Mark as scheduled with target_block = None (scheduler uses locktime timestamp + MTP)
@@ -531,6 +554,14 @@ async def handle_import_tx(request: web.Request) -> web.Response:
     scheduler = request.app.get("scheduler")
     if scheduler:
         asyncio.ensure_future(_resolve_imported_tx(store, scheduler, parsed.txid, raw_hex))
+        # Post-arrival CPFP rescan: this tx might be the PARENT of an existing
+        # retained child (e.g., random-order paste during migration).
+        try:
+            found = scheduler._scan_dependencies()
+            if found:
+                log.info("Post-import dep scan: %d new CPFP relationship(s) detected", found)
+        except Exception as e:
+            log.debug("Post-import dep scan failed: %s", e)
 
     return web.json_response({
         "ok": True,
@@ -625,20 +656,6 @@ async def handle_reorder(request: web.Request) -> web.Response:
     return web.json_response({"ok": True})
 
 
-async def handle_auto_assign(request: web.Request) -> web.Response:
-    store: TxStore = request.app["store"]
-    body = await request.json()
-    base_block = body.get("base_block")
-    offset = body.get("offset", 1)
-    txids = body.get("txids")
-
-    if not base_block or not isinstance(base_block, int):
-        return web.json_response({"error": "base_block (int) required"}, status=400)
-
-    count = store.auto_assign(base_block, offset, txids)
-    return web.json_response({"ok": True, "assigned": count})
-
-
 async def handle_status(request: web.Request) -> web.Response:
     store: TxStore = request.app["store"]
     proxy = request.app.get("proxy_server")
@@ -684,7 +701,7 @@ async def handle_get_settings(request: web.Request) -> web.Response:
         "price_source": store.get_state("price_source") or "",
         "price_enabled": bool(store.get_state("price_source")),
         "liana_height_offset": int(store.get_state("liana_height_offset") or "0"),
-        "liana_increment_rate": int(store.get_state("liana_increment_rate") or "0"),
+        "liana_increment_blocks_per_tx": int(store.get_state("liana_increment_blocks_per_tx") or "1000"),
         "liana_disable_at_height": int(store.get_state("liana_disable_at_height") or "0"),
     })
 
@@ -727,29 +744,16 @@ async def handle_set_settings(request: web.Request) -> web.Response:
 
 
 async def handle_scan_dependencies(request: web.Request) -> web.Response:
-    """Re-scan all active txs for dependencies (CPFP chains)."""
-    store: TxStore = request.app["store"]
-    from src.pool.tx_parser import parse_raw_tx
+    """Re-scan all active txs for CPFP dependencies (debug endpoint).
 
-    active = store.get_all_txs()
-    active_txids = {tx.txid for tx in active}
-    found = 0
-
-    for tx in active:
-        if tx.depends_on:
-            continue  # Already has dependency
-        if not tx.raw_hex or len(tx.raw_hex) < 20:
-            continue
-        try:
-            parsed = parse_raw_tx(tx.raw_hex)
-            for inp in parsed.inputs:
-                if inp.prev_txid in active_txids:
-                    store.set_depends_on(tx.txid, inp.prev_txid)
-                    found += 1
-                    break
-        except Exception:
-            continue
-
+    The interceptor already calls scheduler._scan_dependencies() after every tx
+    is retained, so this endpoint is rarely needed in normal operation — kept
+    for manual troubleshooting via curl.
+    """
+    scheduler = request.app.get("scheduler")
+    if not scheduler:
+        return web.json_response({"error": "Scheduler unavailable"}, status=503)
+    found = scheduler._scan_dependencies()
     return web.json_response({
         "ok": True,
         "found": found,
@@ -968,18 +972,19 @@ async def handle_set_preferences(request: web.Request) -> web.Response:
         except (ValueError, TypeError):
             return web.json_response({"error": "liana_height_offset must be an integer"}, status=400)
 
-    if "liana_increment_rate" in body:
+    if "liana_increment_blocks_per_tx" in body:
         try:
-            rate = int(body["liana_increment_rate"])
-            # Allow 0 (paused) or 5-60 in steps of 5 (UI uses a stepped slider)
-            if rate != 0 and (rate < 5 or rate > 60 or rate % 5 != 0):
+            bump = int(body["liana_increment_blocks_per_tx"])
+            if bump < 1 or bump > 10000:
                 return web.json_response(
-                    {"error": "liana_increment_rate must be 0 or 5-60 seconds in steps of 5"},
+                    {"error": "liana_increment_blocks_per_tx must be 1-10000"},
                     status=400,
                 )
-            store.set_state("liana_increment_rate", str(rate))
+            store.set_state("liana_increment_blocks_per_tx", str(bump))
         except (ValueError, TypeError):
-            return web.json_response({"error": "liana_increment_rate must be an integer"}, status=400)
+            return web.json_response(
+                {"error": "liana_increment_blocks_per_tx must be an integer"}, status=400
+            )
 
     return web.json_response({"ok": True})
 
@@ -1140,8 +1145,10 @@ async def handle_pool_export(request: web.Request) -> web.Response:
         return web.json_response({"error": "Invalid JSON"}, status=400)
 
     method = body.get("method", "")
-    if method not in ("passphrase", "nip44"):
-        return web.json_response({"error": "method must be 'passphrase' or 'nip44'"}, status=400)
+    if method not in ("passphrase", "nip44", "none"):
+        return web.json_response(
+            {"error": "method must be 'passphrase', 'nip44' or 'none'"}, status=400
+        )
 
     txs = [
         *store.get_all_txs(status="pending"),
@@ -1162,6 +1169,7 @@ async def handle_pool_export(request: web.Request) -> web.Response:
         txs_data.append({
             "txid": tx.txid,
             "raw_hex": raw,
+            "raw_hex_checksum": hashlib.sha256(raw.encode("ascii")).hexdigest(),
             "target_block": tx.target_block,
             "target_price": tx.target_price,
             "price_direction": tx.price_direction,
@@ -1180,10 +1188,12 @@ async def handle_pool_export(request: web.Request) -> web.Response:
             passphrase = body.get("passphrase", "")
             if not isinstance(passphrase, str) or len(passphrase) < 8:
                 return web.json_response(
-                    {"error": "passphrase must be at least 8 characters"}, status=400
+                    {"error": "passphrase must be at least 8 characters "
+                              "(use method='none' for unencrypted export)"},
+                    status=400,
                 )
             enc_block = pool_export.encrypt_passphrase(payload, passphrase)
-        else:
+        elif method == "nip44":
             npub = (body.get("npub") or store.get_state("npub") or "").strip()
             if not npub:
                 return web.json_response(
@@ -1191,6 +1201,9 @@ async def handle_pool_export(request: web.Request) -> web.Response:
                     status=400,
                 )
             enc_block = pool_export.encrypt_nip44(payload, npub)
+        else:  # method == "none"
+            log.warning("Pool exported UNENCRYPTED — %d txs", len(txs_data))
+            enc_block = pool_export.build_unencrypted(payload)
     except ValueError as e:
         return web.json_response({"error": str(e)}, status=400)
     except Exception as e:
@@ -1260,6 +1273,11 @@ async def _decrypt_request(body: dict) -> tuple[dict | None, web.Response | None
             {"error": "NIP-44 files must be decrypted in the browser; send 'decrypted_payload'"},
             status=400,
         )
+    if method == "none":
+        try:
+            return pool_export.decrypt_unencrypted(file_obj), None
+        except ValueError as e:
+            return None, web.json_response({"error": str(e)}, status=400)
     return None, web.json_response({"error": f"Unknown encryption: {method}"}, status=400)
 
 
@@ -1296,6 +1314,14 @@ async def handle_pool_import_plan(request: web.Request) -> web.Response:
         if not raw_hex:
             errors.append({"txid": txid_hint, "error": "missing raw_hex"})
             continue
+        # Optional integrity check: SHA-256 of raw_hex. Newer exports include it,
+        # older ones don't — only validate when the field is present.
+        checksum = entry.get("raw_hex_checksum")
+        if checksum:
+            actual = hashlib.sha256(raw_hex.encode("ascii")).hexdigest()
+            if actual != checksum:
+                errors.append({"txid": txid_hint, "error": "raw_hex checksum mismatch (file corrupted?)"})
+                continue
         try:
             parsed = parse_raw_tx(raw_hex)
         except Exception as e:
@@ -1379,6 +1405,11 @@ async def handle_pool_import_apply(request: web.Request) -> web.Response:
         raw_hex = entry.get("raw_hex", "")
         if not raw_hex:
             continue
+        # Same checksum check as import-plan — apply must not write a corrupted tx
+        # if a caller skips the plan step.
+        checksum = entry.get("raw_hex_checksum")
+        if checksum and hashlib.sha256(raw_hex.encode("ascii")).hexdigest() != checksum:
+            continue
         try:
             parsed = parse_raw_tx(raw_hex)
         except Exception:
@@ -1446,6 +1477,18 @@ async def handle_pool_import_apply(request: web.Request) -> web.Response:
         except Exception as e:
             log.error("Failed to import tx %s: %s", txid[:16], e, exc_info=True)
             errors.append({"txid": txid, "error": str(e)})
+
+    # After a batch import, do one full CPFP rescan instead of N per-tx. Catches
+    # parent-after-child relationships within the batch and against existing pool.
+    if added > 0:
+        scheduler = request.app.get("scheduler")
+        if scheduler:
+            try:
+                found = scheduler._scan_dependencies()
+                if found:
+                    log.info("Post-pool-import dep scan: %d new CPFP relationship(s) detected", found)
+            except Exception as e:
+                log.debug("Post-pool-import dep scan failed: %s", e)
 
     return web.json_response({
         "added": added,

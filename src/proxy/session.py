@@ -22,11 +22,16 @@ class ElectrumSession:
         client_writer: asyncio.StreamWriter,
         store: TxStore,
         on_close=None,
+        proxy_server=None,
     ):
         self.client_reader = client_reader
         self.client_writer = client_writer
         self.store = store
         self.on_close = on_close
+        # Weak reference to the ProxyServer — used to fan out the faker bump
+        # to all Liana sessions when an intercepted tx hits the current fake tip.
+        # Optional (None is valid for tests).
+        self.proxy_server = proxy_server
 
         self.upstream: UpstreamConnection | None = None
         self.vmempool = VirtualMempool(store)
@@ -74,7 +79,11 @@ class ElectrumSession:
             # - passthrough_callback: responses to client-forwarded requests
             self.upstream.set_notification_callback(self._on_upstream_notification)
             self.upstream.set_passthrough_callback(self._on_upstream_response)
-            self.interceptor = Interceptor(self.store, self.vmempool, self.upstream)
+            self.interceptor = Interceptor(
+                self.store, self.vmempool, self.upstream,
+                on_fake_bump=self._on_fake_bump,
+                scheduler=self.proxy_server.scheduler if self.proxy_server else None,
+            )
 
             log.info("[%s] Session started (upstream %s:%d)", self.peer_str, host, port)
 
@@ -160,45 +169,66 @@ class ElectrumSession:
         else:
             self._fake_chain = []
 
-    async def advance_fake_chain(self) -> bool:
-        """Extend the fake chain by 1 header and push a headers.subscribe notification.
+    async def advance_fake_chain(self, n: int = 1) -> bool:
+        """Extend the fake chain by `n` headers, pushing one notification per header.
 
-        Called by the global Scheduler tick (one source of truth for all sessions).
-        Returns True if this session advanced, False if it has no active fake chain or isn't Liana.
+        Driven by the interceptor when a tx with locktime == fake tip lands.
+        Returns True if this session advanced at least one header, False if it has no
+        active fake chain or isn't Liana.
         """
+        if n <= 0:
+            return False
         if self._closed or not self._fake_chain or self._real_tip_height is None:
             return False
         if not self._is_liana():
             return False
 
         from src.proxy.header_faker import sha256d, build_header, parse_header
-        last = self._fake_chain[-1]
-        last_parsed = parse_header(last.hex())
-        new_header = build_header(
-            version=4,
-            prev_hash=sha256d(last),
-            merkle_root=b"\x00" * 32,
-            time=last_parsed["time"] + 600,
-            bits=last_parsed["bits"],
-            nonce=0,
-        )
-        self._fake_chain.append(new_header)
-        # Mirror chain length as local offset; store value is owned by the scheduler tick.
-        self._liana_offset = len(self._fake_chain)
-        new_tip_height = self._real_tip_height + self._liana_offset
+        pushed = 0
+        for _ in range(n):
+            last = self._fake_chain[-1]
+            last_parsed = parse_header(last.hex())
+            new_header = build_header(
+                version=4,
+                prev_hash=sha256d(last),
+                merkle_root=b"\x00" * 32,
+                time=last_parsed["time"] + 600,
+                bits=last_parsed["bits"],
+                nonce=0,
+            )
+            self._fake_chain.append(new_header)
+            self._liana_offset = len(self._fake_chain)
+            new_tip_height = self._real_tip_height + self._liana_offset
 
-        notif = {
-            "jsonrpc": "2.0",
-            "method": "blockchain.headers.subscribe",
-            "params": [{"height": new_tip_height, "hex": new_header.hex()}],
-        }
+            notif = {
+                "jsonrpc": "2.0",
+                "method": "blockchain.headers.subscribe",
+                "params": [{"height": new_tip_height, "hex": new_header.hex()}],
+            }
+            try:
+                await self.send_to_client(notif)
+                pushed += 1
+            except Exception as e:
+                log.warning("[%s] Failed to push fake header: %s", self.peer_str, e)
+                break
+        if pushed > 0:
+            log.debug("[%s] Advanced fake tip by %d to %d",
+                      self.peer_str, pushed,
+                      self._real_tip_height + self._liana_offset)
+        return pushed > 0
+
+    async def _on_fake_bump(self, bump: int) -> None:
+        """Callback fired by the interceptor when a retained tx hits the fake tip.
+
+        Fans out to every Liana session via the proxy server so all wallets see
+        the same advanced fake chain.
+        """
+        if self.proxy_server is None or bump <= 0:
+            return
         try:
-            await self.send_to_client(notif)
+            await self.proxy_server.extend_all_liana_chains(n=bump)
         except Exception as e:
-            log.warning("[%s] Failed to push fake header: %s", self.peer_str, e)
-            return False
-        log.debug("[%s] Advanced fake tip to %d", self.peer_str, new_tip_height)
-        return True
+            log.warning("[%s] Fan-out fake bump failed: %s", self.peer_str, e)
 
     def _fake_header_at(self, height: int) -> str | None:
         """Return fake header hex for a height in the offset range, or None."""

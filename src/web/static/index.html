@@ -64,15 +64,11 @@
     </div>
 
     <div class="actions-bar">
-      <span id="lbl-aa-prefix" style="font-size:13px;color:var(--text-muted)">Retransmitir pendientes desde bloque</span>
-      <input type="number" id="aa-base" placeholder="--" style="width:100px">
-      <span id="lbl-aa-gap" style="font-size:13px;color:var(--text-muted)">con</span>
-      <input type="number" id="aa-offset" placeholder="1" value="1" style="width:60px" oninput="updateAaSuffix()">
-      <span id="lbl-aa-suffix" style="font-size:13px;color:var(--text-muted)">bloques entre cada tx</span>
-      <button class="secondary" id="btn-assign" onclick="autoAssign()">Asignar</button>
+      <span id="lbl-pool-actions" style="font-size:13px;color:var(--text-muted);font-weight:600">Pool:</span>
+      <button id="btn-pool-export-header" onclick="openExportModal()">Exportar</button>
+      <button id="btn-pool-import-header" onclick="openImportModal()">Importar</button>
       <span style="flex:1"></span>
-      <button class="secondary" id="btn-rescan" onclick="rescanAll()" title="">&#8635;</button>
-      <button id="btn-import" onclick="toggleImport()">Importar TX</button>
+      <button id="btn-import" onclick="toggleImport()">Introducir TX <span style="font-size:13px">&#9997;&#65039;</span></button>
     </div>
 
     <div id="import-panel" class="alert" style="display:none; background:var(--bg-card); border:1px solid var(--border); color:var(--text);">
@@ -111,6 +107,7 @@
             <th class="sortable col-feerate" onclick="sortBy('fee_rate')" id="th-feerate">Fee rate <span class="sort-arrow" id="sort-fee_rate"></span></th>
             <th class="sortable col-age" onclick="sortBy('oldest_coin_age')" id="th-coinage">Edad moneda <span class="sort-arrow" id="sort-oldest_coin_age"></span></th>
             <th class="sortable col-status" onclick="sortBy('status')" id="th-status">Estado <span class="sort-arrow" id="sort-status"></span></th>
+            <th class="col-status-icon" aria-hidden="true"></th>
             <th class="sortable col-target" onclick="sortBy('target_block')" id="th-target" title="">Retransmitir en <span class="sort-arrow" id="sort-target_block"></span></th>
             <th class="col-actions" id="th-actions" style="text-align:center">Acciones</th>
           </tr>
@@ -176,11 +173,11 @@
         <div style="padding-top:8px;">
           <div class="settings-row">
             <label class="settings-label">Host</label>
-            <input type="text" id="set-host" class="inline-edit" style="width:220px" placeholder="mempool.space">
+            <input type="text" id="set-host" class="inline-edit input-lg" placeholder="mempool.space">
           </div>
           <div class="settings-row">
             <label class="settings-label" id="set-lbl-port">Puerto</label>
-            <input type="number" id="set-port" class="inline-edit" style="width:100px" placeholder="50001">
+            <input type="number" id="set-port" class="inline-edit input-sm" placeholder="50001">
             <label class="settings-label" style="margin-left:16px; display:flex; align-items:center; gap:4px;">
               <input type="checkbox" id="set-ssl"> SSL
             </label>
@@ -217,7 +214,7 @@
           <strong class="behavior-subtitle" id="set-sub-locktime">Locktimes</strong>
           <p class="settings-help" id="set-behavior-desc" style="margin-bottom:6px"></p>
           <label style="display:flex;align-items:center;gap:8px;font-size:13px;color:var(--text-muted);cursor:pointer">
-            <input type="checkbox" id="set-auto-locktime" checked onchange="savePrefAutoLocktime(this.checked)">
+            <input type="checkbox" id="set-auto-locktime" onchange="savePrefAutoLocktime(this.checked)">
             <span id="set-lbl-auto-locktime">Auto agendar transacciones con locktime futuro</span>
           </label>
         </div>
@@ -238,7 +235,7 @@
               <div style="padding-top:8px;">
                 <div class="settings-row">
                   <label class="settings-label">URL</label>
-                  <input type="text" id="set-price-url" class="inline-edit" style="width:280px" placeholder="http://umbrel.local:3200">
+                  <input type="text" id="set-price-url" class="inline-edit input-lg" placeholder="http://umbrel.local:3200">
                   <button class="small" onclick="connectPriceUrl()" style="margin-left:8px;" id="btn-price-connect">Conectar</button>
                 </div>
               </div>
@@ -256,17 +253,16 @@
             <input type="checkbox" id="set-liana-enabled" onchange="toggleLianaFake(this.checked)">
             <span id="set-lbl-liana-enabled">Activar falseado de altura de bloque (se desactiva automáticamente a los 12 bloques reales)</span>
           </label>
-          <div id="liana-fake-config" style="opacity:0.4;pointer-events:none">
+          <div id="liana-fake-config" class="is-disabled">
             <div class="settings-row">
               <label class="settings-label" id="set-lbl-liana-offset">Offset</label>
-              <input type="number" id="set-liana-offset" class="inline-edit" style="width:120px" min="0" max="70000" placeholder="0" value="0" oninput="updateLianaOffsetLabel(this.value)" onchange="saveLianaOffset(this.value)" disabled>
+              <input type="number" id="set-liana-offset" class="inline-edit input-md" min="0" max="70000" placeholder="0" value="0" oninput="updateLianaOffsetLabel(this.value)" onchange="saveLianaOffset(this.value)" disabled>
               <span style="font-size:13px;color:var(--text-muted)" id="set-liana-offset-eq">desactivado</span>
             </div>
             <div class="settings-row">
-              <label class="settings-label" id="set-lbl-liana-increment">Avance</label>
-              <input type="range" id="set-liana-increment" style="width:200px;vertical-align:middle" min="5" max="60" step="5" value="10" oninput="updateLianaIncrementValue(this.value)" onchange="saveLianaIncrement(this.value)" disabled>
-              <span id="set-liana-increment-value" style="font-size:13px;font-weight:600;min-width:36px;display:inline-block;text-align:right">10s</span>
-              <span style="font-size:13px;color:var(--text-muted)" id="set-liana-increment-label">por bloque virtual</span>
+              <label class="settings-label" id="set-lbl-liana-bump">Salto por tx firmada</label>
+              <input type="number" id="set-liana-bump" class="inline-edit input-sm" min="1" max="10000" placeholder="1000" value="1000" onchange="saveLianaBump(this.value)" disabled>
+              <span style="font-size:13px;color:var(--text-muted)" id="set-liana-bump-label">bloques que avanza el fake tip cada vez que llega una tx firmada en él</span>
             </div>
             <div class="settings-row" id="set-liana-disable-at-row" style="display:none">
               <label class="settings-label" id="set-lbl-liana-disable-at">Auto-desactivar</label>
@@ -284,7 +280,7 @@
       <p class="settings-help" id="set-npub-help2"></p>
       <div class="settings-row">
         <label class="settings-label">npub</label>
-        <input type="text" id="set-npub" class="inline-edit" style="width:100%;max-width:500px;font-family:'SF Mono','Fira Code',monospace;font-size:12px" placeholder="npub1..." autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false">
+        <input type="text" id="set-npub" class="inline-edit input-xl input-mono" placeholder="npub1..." autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false">
         <button class="small" id="btn-save-npub" onclick="saveNpub()" style="margin-left:8px;display:none;">Guardar</button>
         <button class="small secondary" id="btn-npub-change" onclick="unlockNpubField()" style="display:none;margin-left:8px;font-size:11px">Cambiar</button>
         <span id="npub-status" style="margin-left:8px;font-size:11px;color:var(--grey);"></span>
@@ -292,30 +288,19 @@
       <p class="settings-help" id="set-npub-warn" style="margin-top:4px"></p>
     </div>
 
-    <!-- 5. Backup -->
+    <!-- 5. Preferences -->
     <div class="settings-section">
-      <h3 class="settings-title" id="set-title-backup">5. Copia de seguridad del pool</h3>
-      <p class="settings-help" id="set-backup-help">Exporta tus transacciones activas (pending + scheduled) a un archivo cifrado para no perderlas si reinicias o migras BP. Re-impórtalas más tarde sin tener que volver a firmar.</p>
-      <div class="settings-row">
-        <button class="small" onclick="openExportModal()" id="btn-pool-export">Exportar pool</button>
-        <button class="small secondary" onclick="openImportModal()" id="btn-pool-import" style="margin-left:8px">Importar pool</button>
-        <span id="pool-backup-status" style="margin-left:12px;font-size:12px;color:var(--text-muted)"></span>
-      </div>
-    </div>
-
-    <!-- 6. Preferences -->
-    <div class="settings-section">
-      <h3 class="settings-title" id="set-title-prefs">6. Otras preferencias</h3>
+      <h3 class="settings-title" id="set-title-prefs">5. Otras preferencias</h3>
       <div class="settings-row">
         <label class="settings-label" id="set-lbl-lang">Idioma</label>
-        <select id="set-lang" class="inline-edit" style="width:120px;padding:6px 8px" onchange="savePrefLang(this.value)">
+        <select id="set-lang" class="inline-edit input-md" onchange="savePrefLang(this.value)">
           <option value="es">Español</option>
           <option value="en">English</option>
         </select>
       </div>
       <div class="settings-row">
         <label class="settings-label" id="set-lbl-unit">Unidad</label>
-        <select id="set-unit" class="inline-edit" style="width:120px;padding:6px 8px" onchange="savePrefUnit(this.value)">
+        <select id="set-unit" class="inline-edit input-md" onchange="savePrefUnit(this.value)">
           <option value="btc">BTC</option>
           <option value="sats">sats</option>
         </select>
@@ -373,72 +358,90 @@
   </div>
 
   <!-- ===================== POOL BACKUP MODALS ===================== -->
-  <div id="pool-modal-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:1000;align-items:center;justify-content:center" onclick="closePoolModal(event)">
-    <div id="pool-modal-export" class="pool-modal" style="display:none;background:var(--bg-card,#1a1a1a);padding:24px;border-radius:8px;max-width:480px;width:90%;box-shadow:0 8px 24px rgba(0,0,0,0.5)" onclick="event.stopPropagation()">
-      <h3 id="export-modal-title" style="margin-top:0">Exportar pool</h3>
-      <p id="export-modal-help" style="font-size:13px;color:var(--text-muted);margin-bottom:16px">Elige cómo cifrar el archivo. El export incluye solo transacciones activas (pending + scheduled).</p>
-      <div class="settings-row" style="display:flex;gap:16px;margin-bottom:12px">
-        <label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer">
-          <input type="radio" name="export-method" value="passphrase" checked onchange="updateExportMethod()"> <span id="export-method-passphrase">Passphrase</span>
+  <div id="pool-modal-overlay" class="modal-backdrop" onclick="closePoolModal(event)">
+    <div id="pool-modal-export" class="modal-card" style="display:none" onclick="event.stopPropagation()">
+      <h3 id="export-modal-title">Exportar pool</h3>
+      <p class="modal-card-help" id="export-modal-help">Elige cómo cifrar el archivo. El export incluye solo transacciones activas (pending + scheduled).</p>
+
+      <div class="radio-stack">
+        <label class="checkbox-row">
+          <input type="radio" name="export-method" value="passphrase" checked onchange="updateExportMethod()">
+          <span id="export-method-passphrase">Passphrase</span>
         </label>
-        <label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer">
-          <input type="radio" name="export-method" value="nip44" onchange="updateExportMethod()"> <span id="export-method-nip44">NIP-44 (tu npub)</span>
+        <label class="checkbox-row">
+          <input type="radio" name="export-method" value="nip44" onchange="updateExportMethod()">
+          <span id="export-method-nip44">NIP-44 (tu npub)</span>
+        </label>
+        <label class="checkbox-row">
+          <input type="radio" name="export-method" value="none" onchange="updateExportMethod()">
+          <span id="export-method-none">Sin cifrar (texto plano)</span>
         </label>
       </div>
-      <form id="export-passphrase-fields" autocomplete="off" onsubmit="return false">
-        <!-- Decoy fields to confuse Chrome's "save password" heuristic. -->
+
+      <form id="export-passphrase-fields" class="form-stack" autocomplete="off" onsubmit="return false">
         <input type="text" name="username" style="display:none" tabindex="-1" autocomplete="username" aria-hidden="true">
         <input type="password" name="password" style="display:none" tabindex="-1" autocomplete="current-password" aria-hidden="true">
-        <div class="settings-row" style="margin-bottom:8px">
-          <input type="password" id="export-passphrase" name="bp-export-key" placeholder="Passphrase (mín 8)" style="width:100%;padding:8px;font-family:'SF Mono','Fira Code',monospace" autocomplete="off" data-lpignore="true" data-1p-ignore="true">
-        </div>
-        <div class="settings-row" style="margin-bottom:12px">
-          <input type="password" id="export-passphrase-confirm" name="bp-export-key-confirm" placeholder="Confirma passphrase" style="width:100%;padding:8px;font-family:'SF Mono','Fira Code',monospace" autocomplete="off" data-lpignore="true" data-1p-ignore="true">
-        </div>
-        <p style="font-size:11px;color:var(--text-muted);margin:0 0 12px"><strong id="export-passphrase-warn">⚠ Si pierdes la passphrase, el archivo es irrecuperable.</strong></p>
+        <input type="password" id="export-passphrase" name="bp-export-key" class="inline-edit input-xl input-mono" placeholder="Passphrase (mín 8)" autocomplete="off" data-lpignore="true" data-1p-ignore="true">
+        <input type="password" id="export-passphrase-confirm" name="bp-export-key-confirm" class="inline-edit input-xl input-mono" placeholder="Confirma passphrase" autocomplete="off" data-lpignore="true" data-1p-ignore="true">
+        <p class="form-note"><strong id="export-passphrase-warn">⚠ Si pierdes la passphrase, el archivo es irrecuperable.</strong></p>
       </form>
-      <div id="export-nip44-fields" style="display:none">
-        <p style="font-size:12px;color:var(--text-muted);margin:0 0 12px" id="export-nip44-help">Se cifrará con la npub configurada en BP. Para descifrar al importar necesitarás una extensión NIP-07 (Alby, nos2x).</p>
-        <p id="export-nip44-npub" style="font-size:11px;font-family:'SF Mono','Fira Code',monospace;color:var(--text-muted);word-break:break-all;margin:0 0 12px"></p>
+
+      <div id="export-nip44-fields" class="form-stack" style="display:none">
+        <p class="form-note" id="export-nip44-help" style="margin:0">Se cifrará con la npub configurada en BP. Para descifrar al importar necesitarás una extensión NIP-07 (Alby, nos2x).</p>
+        <p id="export-nip44-npub" class="kbd-mono" style="font-size:11px;word-break:break-all;margin:0"></p>
       </div>
-      <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:8px">
+
+      <div id="export-none-fields" class="form-stack" style="display:none">
+        <p class="alert-soft" id="export-none-warn" style="margin:0">⚠ El archivo contendrá tus transacciones firmadas en claro. Cualquiera con acceso podrá verlas y retransmitirlas.</p>
+        <label class="checkbox-row">
+          <input type="checkbox" id="export-none-ack">
+          <span id="export-none-ack-label">Entiendo y quiero exportar sin cifrar</span>
+        </label>
+      </div>
+
+      <div id="export-modal-error" class="modal-error"></div>
+      <div class="modal-card-actions">
         <button class="small secondary" onclick="closePoolModal()" id="export-modal-cancel">Cancelar</button>
         <button class="small" onclick="doExport()" id="export-modal-submit">Descargar</button>
       </div>
-      <div id="export-modal-error" style="margin-top:10px;font-size:12px;color:var(--red);display:none"></div>
     </div>
 
-    <div id="pool-modal-import" class="pool-modal" style="display:none;background:var(--bg-card,#1a1a1a);padding:24px;border-radius:8px;max-width:520px;width:90%;box-shadow:0 8px 24px rgba(0,0,0,0.5)" onclick="event.stopPropagation()">
-      <h3 id="import-modal-title" style="margin-top:0">Importar pool</h3>
+    <div id="pool-modal-import" class="modal-card" style="display:none" onclick="event.stopPropagation()">
+      <h3 id="import-modal-title">Importar pool</h3>
+
       <div id="import-step-pick">
-        <p style="font-size:13px;color:var(--text-muted);margin-bottom:12px" id="import-modal-help">Selecciona un archivo .bp exportado anteriormente.</p>
-        <input type="file" id="import-file" accept=".bp,.json,application/json,application/octet-stream" onchange="onImportFileChosen(this)" style="display:block;margin-bottom:12px">
-        <form id="import-passphrase-row" style="display:none" autocomplete="off" onsubmit="return false">
-          <input type="text" name="username" style="display:none" tabindex="-1" autocomplete="username" aria-hidden="true">
-          <input type="password" name="password" style="display:none" tabindex="-1" autocomplete="current-password" aria-hidden="true">
-          <input type="password" id="import-passphrase" name="bp-import-key" placeholder="Passphrase del archivo" style="width:100%;padding:8px;font-family:'SF Mono','Fira Code',monospace;margin-bottom:8px" autocomplete="off" data-lpignore="true" data-1p-ignore="true">
-        </form>
-        <div id="import-nip44-row" style="display:none">
-          <p style="font-size:12px;color:var(--text-muted);margin:0 0 8px" id="import-nip44-help">Archivo cifrado NIP-44 — se requiere extensión NIP-07 (Alby/nos2x) para descifrar.</p>
+        <p class="modal-card-help" id="import-modal-help">Selecciona un archivo .bp exportado anteriormente.</p>
+        <div class="form-stack">
+          <input type="file" id="import-file" class="file-input" accept=".bp,.json,application/json,application/octet-stream" onchange="onImportFileChosen(this)">
+          <form id="import-passphrase-row" style="display:none" autocomplete="off" onsubmit="return false">
+            <input type="text" name="username" style="display:none" tabindex="-1" autocomplete="username" aria-hidden="true">
+            <input type="password" name="password" style="display:none" tabindex="-1" autocomplete="current-password" aria-hidden="true">
+            <input type="password" id="import-passphrase" name="bp-import-key" class="inline-edit input-xl input-mono" placeholder="Passphrase del archivo" autocomplete="off" data-lpignore="true" data-1p-ignore="true">
+          </form>
+          <div id="import-nip44-row" style="display:none">
+            <p class="form-note" id="import-nip44-help" style="margin:0">Archivo cifrado NIP-44 — se requiere extensión NIP-07 (Alby/nos2x) para descifrar.</p>
+          </div>
         </div>
-        <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:12px">
+        <div class="modal-card-actions">
           <button class="small secondary" onclick="closePoolModal()" id="import-modal-cancel">Cancelar</button>
           <button class="small" onclick="doImportPlan()" id="import-plan-submit" disabled>Analizar</button>
         </div>
       </div>
+
       <div id="import-step-review" style="display:none">
-        <div id="import-summary" style="font-size:13px;margin-bottom:12px"></div>
-        <div id="import-conflicts-block" style="display:none;margin-bottom:12px;padding:10px;background:rgba(255,80,80,0.08);border-left:3px solid var(--red);font-size:12px">
+        <p id="import-summary" class="modal-card-help" style="font-size:13px;color:var(--text)"></p>
+        <div id="import-conflicts-block" class="alert-soft" style="display:none">
           <strong id="import-conflicts-title">⚠ Conflictos detectados</strong>
-          <div id="import-conflicts-list" style="margin-top:6px;font-family:'SF Mono','Fira Code',monospace;font-size:11px"></div>
-          <p style="margin:8px 0 0;font-size:11px;color:var(--text-muted)" id="import-conflicts-note">Fase 1 no permite resolver conflictos UTXO. Salta esas txs en otra exportación o limpia el pool antes de importar.</p>
+          <div id="import-conflicts-list" class="input-mono" style="margin-top:var(--space-2);font-size:11px"></div>
+          <p class="form-note" id="import-conflicts-note" style="margin-top:var(--space-2)">Fase 1 no permite resolver conflictos UTXO. Salta esas txs en otra exportación o limpia el pool antes de importar.</p>
         </div>
-        <div style="display:flex;gap:8px;justify-content:flex-end">
+        <div class="modal-card-actions">
           <button class="small secondary" onclick="closePoolModal()" id="import-review-cancel">Cancelar</button>
           <button class="small" onclick="doImportApply()" id="import-apply-submit">Importar</button>
         </div>
       </div>
-      <div id="import-modal-error" style="margin-top:10px;font-size:12px;color:var(--red);display:none"></div>
+
+      <div id="import-modal-error" class="modal-error"></div>
     </div>
   </div>
 

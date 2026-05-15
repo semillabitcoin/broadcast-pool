@@ -9,6 +9,10 @@ import struct
 from dataclasses import dataclass, field
 from io import BytesIO
 
+# nLockTime values >= this are interpreted as a unix timestamp; below as a block height.
+# Defined here (the canonical home for tx-parsing constants) and imported elsewhere.
+LOCKTIME_TIMESTAMP_THRESHOLD = 500_000_000
+
 
 @dataclass
 class TxInput:

@@ -477,37 +477,6 @@ class TxStore:
                 )
                 self._conn.commit()
 
-    def auto_assign(self, base_block: int, offset: int, txids: list[str] | None = None) -> int:
-        """Auto-assign target blocks to pending txs on active network. Returns count assigned."""
-        with self._lock:
-            if txids:
-                placeholders = ",".join("?" * len(txids))
-                rows = self._conn.execute(
-                    f"""SELECT txid FROM retained_txs
-                        WHERE txid IN ({placeholders}) AND network = ? AND status = 'pending'
-                        ORDER BY sort_order""",
-                    [*txids, self._network],
-                ).fetchall()
-            else:
-                rows = self._conn.execute(
-                    "SELECT txid FROM retained_txs WHERE network = ? AND status = 'pending' ORDER BY sort_order",
-                    (self._network,),
-                ).fetchall()
-
-            count = 0
-            for i, row in enumerate(rows):
-                target = base_block + (offset * i)
-                self._conn.execute(
-                    """UPDATE retained_txs
-                       SET target_block = ?, status = 'scheduled', updated_at = datetime('now')
-                       WHERE txid = ?""",
-                    (target, row["txid"]),
-                )
-                count += 1
-
-            self._conn.commit()
-            return count
-
     # -- Proxy state --
 
     def get_state(self, key: str) -> str | None:

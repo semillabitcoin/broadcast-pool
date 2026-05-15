@@ -13,7 +13,7 @@ from src.pool.store import TxStore
 from src.proxy.upstream import UpstreamConnection
 from src import config
 
-LOCKTIME_THRESHOLD = 500_000_000  # nLockTime >= this is a unix timestamp
+from src.pool.tx_parser import LOCKTIME_TIMESTAMP_THRESHOLD as LOCKTIME_THRESHOLD
 
 log = logging.getLogger(__name__)
 
@@ -24,21 +24,19 @@ class Scheduler:
     def __init__(self, store: TxStore, notify_callback=None, proxy_server=None):
         self.store = store
         self.notify_callback = notify_callback  # async fn(set[str]) to notify sessions
-        # ProxyServer reference: needed to push fake-block notifications to Liana sessions
+        # ProxyServer reference: kept for future fan-out needs (not used here anymore;
+        # the faker is now event-driven via Interceptor → Session → ProxyServer).
         self.proxy_server = proxy_server
         self._upstream: UpstreamConnection | None = None
         self._running = False
         self._reconnect_event = asyncio.Event()
         self._price_task: asyncio.Task | None = None
-        self._liana_increment_task: asyncio.Task | None = None
         self._current_price: float | None = None
 
     async def start(self) -> None:
         self._running = True
         # Price poller runs independently of upstream connection
         self._price_task = asyncio.create_task(self._price_poller())
-        # Global Liana fake-block-height increment loop (single source of truth)
-        self._liana_increment_task = asyncio.create_task(self._liana_increment_loop())
         backoff = 1
         while self._running:
             try:
@@ -55,8 +53,6 @@ class Scheduler:
         self._running = False
         if self._price_task:
             self._price_task.cancel()
-        if self._liana_increment_task:
-            self._liana_increment_task.cancel()
         if self._upstream:
             await self._upstream.close()
 
@@ -217,53 +213,6 @@ class Scheduler:
             purged = self.store.purge_confirmed(height, config.PURGE_AFTER_BLOCKS)
             if purged:
                 log.info("Purged %d confirmed tx(s) at depth %d+", purged, config.PURGE_AFTER_BLOCKS)
-
-    async def _liana_increment_loop(self) -> None:
-        """Advance the global Liana fake block height once every `liana_increment_rate` seconds.
-
-        Single source of truth for the offset progression: persists to store and asks the proxy
-        to extend every Liana session's fake chain so all connected wallets see the same tip.
-        Idle when faking is disabled (offset=0) or rate is 0.
-        """
-        IDLE_SECONDS = 5
-        CAP = 70000  # ~15 months, matches Session._load_liana_offset bounds
-        while self._running:
-            try:
-                rate_raw = self.store.get_state("liana_increment_rate") or "0"
-                offset_raw = self.store.get_state("liana_height_offset") or "0"
-                try:
-                    rate = int(rate_raw)
-                    offset = int(offset_raw)
-                except ValueError:
-                    rate = 0
-                    offset = 0
-
-                if rate <= 0 or offset <= 0 or offset >= CAP:
-                    await asyncio.sleep(IDLE_SECONDS)
-                    continue
-
-                await asyncio.sleep(rate)
-
-                # Re-read in case the user reset offset/rate during sleep
-                try:
-                    offset = int(self.store.get_state("liana_height_offset") or "0")
-                    rate_now = int(self.store.get_state("liana_increment_rate") or "0")
-                except ValueError:
-                    continue
-                if rate_now <= 0 or offset <= 0 or offset >= CAP:
-                    continue
-
-                new_offset = offset + 1
-                self.store.set_state("liana_height_offset", str(new_offset))
-
-                if self.proxy_server:
-                    advanced = await self.proxy_server.extend_all_liana_chains()
-                    log.debug("Liana tick → offset=%d, advanced %d session(s)", new_offset, advanced)
-            except asyncio.CancelledError:
-                break
-            except Exception as e:
-                log.warning("Liana increment loop error: %s", e)
-                await asyncio.sleep(IDLE_SECONDS)
 
     async def _price_poller(self) -> None:
         """Poll price source every 30s and store current price."""
@@ -510,6 +459,37 @@ class Scheduler:
                     self.store.update_broadcast_time(tx.txid)
                 except Exception as e:
                     log.debug("Rebroadcast failed for %s: %s", tx.txid[:16], e)
+
+    def _scan_dependencies(self) -> int:
+        """Detect CPFP relationships between active retained txs.
+
+        For each active tx without depends_on set, check if any input spends an
+        output of another active tx → mark depends_on. Returns the number of new
+        dependencies recorded. Idempotent — txs that already have depends_on are skipped.
+
+        Called by the interceptor after each tx is saved (catches the case where the
+        parent arrives AFTER the child) and by the /api/txs/scan-dependencies endpoint.
+        """
+        from src.pool.tx_parser import parse_raw_tx
+        active = self.store.get_all_txs()
+        active_txids = {tx.txid for tx in active}
+        found = 0
+        for tx in active:
+            if tx.depends_on:
+                continue
+            raw = self.store.get_raw_hex(tx.txid)
+            if not raw or raw.startswith("[") or len(raw) < 20:
+                continue
+            try:
+                parsed = parse_raw_tx(raw)
+            except Exception:
+                continue
+            for inp in parsed.inputs:
+                if inp.prev_txid in active_txids and inp.prev_txid != tx.txid:
+                    self.store.set_depends_on(tx.txid, inp.prev_txid)
+                    found += 1
+                    break
+        return found
 
     async def _compute_mtp(self, height: int) -> int | None:
         """Compute Median Time Past from the last 11 block headers."""
