@@ -1891,8 +1891,10 @@ function updatePriceCurrentLabel(source) {
   } else if (source === 'coingecko') {
     el.textContent = `${t('currentUpstream')} CoinGecko API`;
   } else {
-    // Try to match a discovered oracle for friendly name
-    const name = source.includes('3200') ? 'El Or\u00e1culo (local)' : source;
+    // Try to match a discovered oracle for friendly name (port 7777 from v2,
+    // 3200 on older installs).
+    const name = (source.includes(':7777') || source.includes(':3200'))
+      ? 'El Or\u00e1culo (local)' : source;
     el.textContent = `${t('currentUpstream')} ${name}`;
   }
 }

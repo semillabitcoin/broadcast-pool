@@ -21,6 +21,9 @@ services:
       DB_PATH: /data/pool.db
       WEB_PORT: "3080"
       PROXY_PORT: "50005"
+    # Reach other Umbrel apps (e.g. the price oracle) via their host-published ports.
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     networks:
       default:
         ipv4_address: 10.21.21.11

@@ -1032,12 +1032,24 @@ async def handle_get_price(request: web.Request) -> web.Response:
 
 
 async def handle_discover_price_oracle(request: web.Request) -> web.Response:
-    """Probe known local addresses for El Oráculo (bitcoin-price-oracle)."""
+    """Probe known local addresses for El Oráculo (bitcoin-price-oracle).
+
+    On Umbrel, BP and the oracle live on separate per-app Docker networks, so
+    the oracle's Docker DNS name doesn't resolve and ``127.0.0.1`` points at BP
+    itself. ``host.docker.internal`` (declared via ``extra_hosts: host-gateway``
+    in docker-compose.yml) reaches the Umbrel host, where the oracle publishes
+    its port — this is the path that actually works in production.
+    """
     import aiohttp as aio
 
+    # The oracle moved from 3200 to 7777 starting with its next release. We
+    # probe 7777 first (forward-looking) and keep 3200 as a fallback for users
+    # still on the old version.
+    hosts = ("host.docker.internal", "bitcoin-price-oracle", "127.0.0.1")
+    ports = (7777, 3200)
     candidates = [
-        {"host": "bitcoin-price-oracle", "port": 3200, "name": "Price oracle"},
-        {"host": "127.0.0.1", "port": 3200, "name": "Price oracle"},
+        {"host": h, "port": p, "name": "Price oracle"}
+        for p in ports for h in hosts
     ]
 
     results = []
