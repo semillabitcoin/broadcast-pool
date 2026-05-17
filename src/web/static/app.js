@@ -49,8 +49,8 @@ const i18n = {
     setUpstream: '1. Conecta Broadcast Pool a un servidor Electrum',
     setUpstreamDesc: 'BP reenvía las txs a través de este servidor. También consulta altura de bloque y MTP para evaluar locktimes.',
     setVault: '3. B\u00f3veda cifrada (Nostr)',
-    setPrefs: '4. Otras preferencias', setBehavior: '2. Retransmisión automática',
-    setBehaviorDesc: 'Txs con nLockTime futuro se agendan autom\u00e1ticamente al bloque o MTP indicados. Las txs con locktime 0 o ya alcanzado quedan pendientes hasta acci\u00f3n manual.', setLang: 'Idioma', setUnit: 'Unidad', setPort: 'Puerto',
+    setPrefs: '4. Otras preferencias', setBehavior: '2. Comportamiento de Broadcast Pool',
+    setBehaviorScopeNote: 'Estas reglas solo aplican a txs interceptadas a trav\u00e9s del proxy Electrum. Las introducidas manualmente (Importar TX \u270d\ufe0f) siempre quedan en Pendiente.', setLang: 'Idioma', setUnit: 'Unidad', setPort: 'Puerto',
     setNpubHelp: 'BP purga las txs confirmadas tras 1 bloque. Configura un npub para archivarlas cifradas \u2014 solo descifrable con una extensi\u00f3n NIP-07 (Alby, nos2x).',
     setNpubWarn: 'Nota: usa un npub burner \u2014 no asocies tu nym principal a tu actividad de tx bitcoin.',
     testConn: 'Verificar conexi\u00f3n',
@@ -67,10 +67,18 @@ const i18n = {
     removeNpub: 'Quitar',
     removeNpubConfirm: '⚠ Vas a eliminar la npub configurada y la BÓVEDA cifrada asociada. Las txs archivadas se borran sin posibilidad de recuperación. ¿Continuar?',
     copied: 'copiado',
-    autoLocktime: 'Desactivar auto-agendado para nLocktimes futuros',
-    subLocktime: 'A. nLockTime', subPrice: 'B. Retransmisión por precio',
-    subLiana: 'C. Altura de bloque virtual',
-    lianaDesc: 'Algunas wallets (p.ej. Liana) fijan el nLockTime al bloque actual sin permitir cambiarlo. BP puede reportarles una altura virtual mayor para que firmen con nLockTime futuro. Configura el offset y activa la funci\u00f3n antes de crear cada tx de ciclado.',
+    subAutoFuture: '2.1 Auto programar tx con nLockTime futuro',
+    subAutoFutureDesc: 'BP detecta nLockTime futuro (altura de bloque ≥ tip+1, o timestamp aún no rebasado por el MTP) y agenda la tx para retransmitir cuando se alcance el bloque o MTP indicado.<br><em>Activo por defecto.</em>',
+    subAutoFutureToggle: 'Activar auto-programación de nLockTime futuro',
+    subAutoPresentPast: '2.2 Auto transmitir con nLockTime presente o pasado',
+    subAutoPresentPastDesc: 'Cuando la tx tiene nLockTime ≠ 0 y su condición ya está cumplida (altura ≤ tip actual, o MTP ya rebasado), BP la retransmite al instante al upstream sin requerir clic manual. Coincide con el patrón anti-fee-sniping de Sparrow/Core/Electrum, donde el locktime ≈ tip. Activarlo simularía comportamiento normal de Electrum Server para tx con nLockTime ≠ 0.<br><em>Desactivado por defecto.</em>',
+    subAutoPresentPastToggle: 'Activar auto-transmisión para nLockTime presente o pasado',
+    subAutoZero: '2.3 Auto transmitir con nLockTime = 0',
+    subAutoZeroDesc: 'Cuando la tx llega con <code class="kbd-mono">nLockTime = 0</code> (sin restricción temporal), BP la retransmite al instante. Si lo dejas desactivado queda en Pendiente para que la dispares manualmente o la combines con un trigger por precio.<br><em>Desactivado por defecto.</em>',
+    subAutoZeroToggle: 'Activar auto-transmisión para nLockTime = 0',
+    subPrice: '2.4 Retransmisión por precio',
+    subLiana: '2.5 Altura de bloque virtual',
+    lianaDesc: 'Algunas wallets (p.ej. Liana) fijan el nLockTime al bloque actual sin permitir cambiarlo. BP puede reportarles una altura virtual mayor para que firmen con nLockTime futuro. Configura el offset y activa la funci\u00f3n antes de crear cada tx de ciclado.<br><em>Desactivado por defecto.</em>',
     lianaOffset: 'Offset',
     lianaBump: 'Avance por tx firmada',
     lianaBumpLabel: 'bloques que avanza la altura virtual por cada tx recibida en ella',
@@ -79,7 +87,7 @@ const i18n = {
     lianaDisableAtPassed: 'pendiente — se desactivará en el próximo bloque',
     lianaEnabled: 'Activar altura virtual (se desactiva en 12 bloques reales)',
     lianaEnabledActive: 'Activar altura virtual (se desactiva en bloque {n})',
-    priceDesc: 'Retransmite txs al cruzar un umbral de precio de BTC. \u00datil para enviar colateral ante una liquidaci\u00f3n inminente.',
+    priceDesc: 'Retransmite txs al cruzar un umbral de precio de BTC. \u00datil para enviar colateral ante una liquidaci\u00f3n inminente.<br><em>Desactivado por defecto.</em>',
     priceEnabled: 'Activar retransmisi\u00f3n por precio',
     priceSource: 'Fuente', priceNone: 'Seleccionar...', priceCustom: 'Or\u00e1culo local',
     priceSchedule: 'Retransmitir si BTC', priceBelow: 'cae por debajo de', priceAbove: 'sube por encima de',
@@ -133,8 +141,8 @@ const i18n = {
     connectionsTip: 'Wallets currently connected to Broadcast Pool',
     change: 'Change', host: 'Host', port: 'Port', connect: 'Connect',
     cancel: 'Cancel', reconnecting: 'Reconnecting...',
-    setBehavior: '2. Automatic broadcast',
-    setBehaviorDesc: 'Txs with a future nLockTime are auto-scheduled for broadcast at the specified block or MTP. Txs with locktime 0 or already reached stay pending until manual action.',
+    setBehavior: '2. Broadcast Pool behavior',
+    setBehaviorScopeNote: 'These rules only apply to txs intercepted via the Electrum proxy. Txs added manually (Enter TX ✍️) always land as Pending.',
     importTx: 'Enter TX ✍️',
     poolActionsLabel: 'Pool:',
     poolImportHeader: 'Import',
@@ -181,10 +189,18 @@ const i18n = {
     removeNpub: 'Remove',
     removeNpubConfirm: '⚠ You are about to delete the configured npub and its encrypted VAULT. Archived txs will be permanently deleted with no recovery. Continue?',
     copied: 'copied',
-    autoLocktime: 'Disable auto-scheduling for future nLocktimes',
-    subLocktime: 'A. nLockTime', subPrice: 'B. Price-triggered broadcast',
-    subLiana: 'C. Virtual block height',
-    lianaDesc: 'Some wallets (e.g. Liana) set nLockTime to the current tip without allowing changes. BP can report a virtual height so they sign with a future nLockTime. Set the offset and enable before creating each cycling tx.',
+    subAutoFuture: '2.1 Auto-schedule txs with future nLockTime',
+    subAutoFutureDesc: 'BP detects a future nLockTime (block height ≥ tip+1, or a timestamp not yet reached by MTP) and schedules the tx to be broadcast when the target block or MTP arrives.<br><em>On by default.</em>',
+    subAutoFutureToggle: 'Enable auto-scheduling for future nLockTime',
+    subAutoPresentPast: '2.2 Auto-broadcast txs with present/past nLockTime',
+    subAutoPresentPastDesc: 'When a tx has nLockTime ≠ 0 and the condition is already met (height ≤ current tip, or MTP already past the timestamp), BP forwards it to the upstream immediately without manual click. This matches the anti-fee-sniping pattern of Sparrow/Core/Electrum where locktime ≈ tip. Enabling this mimics the normal behavior of an Electrum Server for txs with nLockTime ≠ 0.<br><em>Off by default.</em>',
+    subAutoPresentPastToggle: 'Enable auto-broadcast for present/past nLockTime',
+    subAutoZero: '2.3 Auto-broadcast txs with nLockTime = 0',
+    subAutoZeroDesc: 'When a tx arrives with <code class="kbd-mono">nLockTime = 0</code> (no time-lock), BP forwards it immediately. If you leave it off, it lands as Pending so you can fire it manually or pair it with a price trigger.<br><em>Off by default.</em>',
+    subAutoZeroToggle: 'Enable auto-broadcast for nLockTime = 0',
+    subPrice: '2.4 Price-triggered broadcast',
+    subLiana: '2.5 Virtual block height',
+    lianaDesc: 'Some wallets (e.g. Liana) set nLockTime to the current tip without allowing changes. BP can report a virtual height so they sign with a future nLockTime. Set the offset and enable before creating each cycling tx.<br><em>Off by default.</em>',
     lianaOffset: 'Offset',
     lianaBump: 'Blocks bumped per signed tx',
     lianaBumpLabel: 'blocks the virtual height advances per tx received at it',
@@ -193,7 +209,7 @@ const i18n = {
     lianaDisableAtPassed: 'pending — will disable on next block',
     lianaEnabled: 'Enable virtual height (auto-disables after 12 real blocks)',
     lianaEnabledActive: 'Enable virtual height (auto-disables at block {n})',
-    priceDesc: 'Broadcasts txs when BTC price crosses a set threshold. Use this to send collateral before a loan gets liquidated.',
+    priceDesc: 'Broadcasts txs when BTC price crosses a set threshold. Use this to send collateral before a loan gets liquidated.<br><em>Off by default.</em>',
     priceEnabled: 'Enable price-based broadcast',
     priceSource: 'Source', priceNone: 'Select...', priceCustom: 'Local oracle',
     priceSchedule: 'Broadcast if BTC', priceBelow: 'drops below', priceAbove: 'rises above',
@@ -289,18 +305,25 @@ function applyLang() {
   document.getElementById('set-lbl-lang').textContent = t('setLang');
   document.getElementById('set-lbl-unit').textContent = t('setUnit');
   document.getElementById('set-title-behavior').textContent = t('setBehavior');
-  document.getElementById('set-sub-locktime').textContent = t('subLocktime');
-  document.getElementById('set-behavior-desc').textContent = t('setBehaviorDesc');
-  document.getElementById('set-lbl-auto-locktime').textContent = t('autoLocktime');
+  document.getElementById('set-behavior-scope-note').textContent = t('setBehaviorScopeNote');
+  document.getElementById('set-sub-auto-future').textContent = t('subAutoFuture');
+  document.getElementById('set-auto-future-desc').innerHTML = t('subAutoFutureDesc');
+  document.getElementById('set-lbl-auto-future').textContent = t('subAutoFutureToggle');
+  document.getElementById('set-sub-auto-present-past').textContent = t('subAutoPresentPast');
+  document.getElementById('set-auto-present-past-desc').innerHTML = t('subAutoPresentPastDesc');
+  document.getElementById('set-lbl-auto-present-past').textContent = t('subAutoPresentPastToggle');
+  document.getElementById('set-sub-auto-zero').textContent = t('subAutoZero');
+  document.getElementById('set-auto-zero-desc').innerHTML = t('subAutoZeroDesc');
+  document.getElementById('set-lbl-auto-zero').textContent = t('subAutoZeroToggle');
   document.getElementById('set-sub-liana').textContent = t('subLiana');
-  document.getElementById('set-liana-desc').textContent = t('lianaDesc');
+  document.getElementById('set-liana-desc').innerHTML = t('lianaDesc');
   document.getElementById('set-lbl-liana-offset').textContent = t('lianaOffset');
   document.getElementById('set-lbl-liana-bump').textContent = t('lianaBump');
   document.getElementById('set-liana-bump-label').textContent = t('lianaBumpLabel');
   document.getElementById('set-lbl-liana-disable-at').textContent = t('lianaDisableAt');
   document.getElementById('set-lbl-liana-enabled').textContent = t('lianaEnabled');
   document.getElementById('set-sub-price').textContent = t('subPrice');
-  document.getElementById('set-price-desc').textContent = t('priceDesc');
+  document.getElementById('set-price-desc').innerHTML = t('priceDesc');
   document.getElementById('set-lbl-price-enabled').textContent = t('priceEnabled');
   document.getElementById('price-manual-summary').textContent = lang === 'es' ? 'Configurar URL manualmente' : 'Configure URL manually';
   document.getElementById('manual-conn-summary').textContent = lang === 'es' ? 'Configurar manualmente' : 'Configure manually';
@@ -832,6 +855,14 @@ function locktimeLock(tx) {
   const lt = tx.locktime;
   const id = 'lock-' + tx.txid_full;
   const isPending = tx.status === 'pending';
+
+  // Suppress the anti-fee-sniping warning when the user has already opted into
+  // the fingerprint trade-off via the auto-broadcast toggle, OR when the tx is
+  // no longer in pending state (the broadcast decision has already been taken).
+  if (cat === 'present_past') {
+    if (!isPending) return '';
+    if (currentData && currentData.auto_broadcast_present_past_locktime) return '';
+  }
 
   if (cat === 'future') {
     const autoMsg = tx.status === 'scheduled'
@@ -1396,7 +1427,10 @@ async function loadSettingsTab() {
   document.getElementById('set-lang').value = lang;
   document.getElementById('set-unit').value = unit;
   // Checkbox semantics are inverted: checked = user opted OUT (feature still ON by default)
-  document.getElementById('set-auto-locktime').checked = s.auto_schedule_locktime === false;
+  // New positive-polarity checkboxes (default ON for future, OFF for present/past + zero).
+  document.getElementById('set-auto-future').checked = s.auto_schedule_locktime !== false;
+  document.getElementById('set-auto-present-past').checked = !!s.auto_broadcast_present_past_locktime;
+  document.getElementById('set-auto-zero').checked = !!s.auto_broadcast_zero_locktime;
   const lianaOffset = s.liana_height_offset || 0;
   const lianaBump = s.liana_increment_blocks_per_tx || 1000;
   const lianaDisableAt = s.liana_disable_at_height || 0;
@@ -1777,12 +1811,28 @@ function savePrefUnit(val) {
   }
 }
 
-function savePrefAutoLocktime(checked) {
-  // Checkbox is "Desactivar auto-agendado" → checked means feature OFF (auto_schedule_locktime=false)
+// Positive-polarity toggles. Checked = feature ON.
+function savePrefAutoFuture(checked) {
   fetchJSON('/api/preferences', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ auto_schedule_locktime: !checked }),
+    body: JSON.stringify({ auto_schedule_locktime: !!checked }),
+  });
+}
+
+function savePrefAutoPresentPast(checked) {
+  fetchJSON('/api/preferences', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ auto_broadcast_present_past_locktime: !!checked }),
+  });
+}
+
+function savePrefAutoZero(checked) {
+  fetchJSON('/api/preferences', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ auto_broadcast_zero_locktime: !!checked }),
   });
 }
 

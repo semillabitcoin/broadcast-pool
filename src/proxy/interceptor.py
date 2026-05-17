@@ -129,15 +129,44 @@ class Interceptor:
                      replaced_tx.fee_rate, parsed.fee_rate)
 
         # nLockTime handling:
-        # - locktime < 500M = block height
+        # - locktime < 500M  = block height
         # - locktime >= 500M = unix timestamp (compared against MTP, not wall clock)
-        # - Sparrow sets locktime ≈ current_height as anti-fee-sniping (ignore)
-        current_height = self.store.get_current_height()
+        # - locktime == 0    = no time-lock
+        #
+        # Three independent toggles (only applied to txs intercepted from the
+        # Electrum proxy; manual imports always land as "pending"):
+        #   auto_schedule_locktime              (default ON)  — future locktime  → auto-schedule
+        #   auto_broadcast_present_past_locktime(default OFF) — present/past locktime ≠ 0 → broadcast now
+        #   auto_broadcast_zero_locktime        (default OFF) — locktime == 0    → broadcast now
+        current_height = self.store.get_current_height() or 0
 
-        auto_lock = self.store.get_state("auto_schedule_locktime") != "false"
+        auto_future = self.store.get_state("auto_schedule_locktime") != "false"
+        auto_present_past = self.store.get_state("auto_broadcast_present_past_locktime") == "true"
+        auto_zero = self.store.get_state("auto_broadcast_zero_locktime") == "true"
 
-        if parsed.locktime >= LOCKTIME_TIMESTAMP_THRESHOLD and auto_lock:
-            # Unix timestamp locktime — mark as scheduled, scheduler will broadcast when MTP passes
+        # Decide the locktime category first, then apply the matching toggle.
+        if parsed.locktime == 0:
+            category = "zero"
+        elif parsed.locktime >= LOCKTIME_TIMESTAMP_THRESHOLD:
+            current_mtp = int(self.store.get_state("current_mtp") or "0")
+            category = "future_ts" if (current_mtp == 0 or parsed.locktime > current_mtp) else "past_ts"
+        else:
+            category = "future_block" if parsed.locktime > current_height else "past_block"
+
+        async def _fire_immediate_broadcast(txid: str, label: str) -> None:
+            if not self.scheduler:
+                log.warning("Auto-broadcast requested for %s but no scheduler ref; tx stays pending", txid[:16])
+                return
+            try:
+                result = await self.scheduler.broadcast_now(txid)
+                if "error" in result:
+                    log.warning("Auto-broadcast (%s) failed for %s: %s", label, txid[:16], result["error"])
+                else:
+                    log.info("Auto-broadcast (%s) succeeded for %s", label, txid[:16])
+            except Exception as e:  # pragma: no cover — defensive
+                log.warning("Auto-broadcast (%s) raised for %s: %s", label, txid[:16], e)
+
+        if category == "future_ts" and auto_future:
             from datetime import datetime
             dt = datetime.utcfromtimestamp(parsed.locktime).strftime("%Y-%m-%d %H:%M UTC")
             self.store.update_status(parsed.txid, "scheduled")
@@ -145,21 +174,30 @@ class Interceptor:
                 "Retained tx %s with timestamp locktime=%d (%s, %.1f sat/vB) — scheduled for MTP",
                 parsed.txid[:16], parsed.locktime, dt, parsed.fee_rate,
             )
-        elif (0 < parsed.locktime < LOCKTIME_TIMESTAMP_THRESHOLD
-                and parsed.locktime > max(current_height, 1) + 1
-                and auto_lock):
-            # Real future block height locktime — auto-schedule
+        elif category == "future_block" and auto_future:
             self.store.update_target_block(parsed.txid, parsed.locktime)
             log.info(
                 "Retained tx %s with block locktime=%d (auto-scheduled, %.1f sat/vB)",
                 parsed.txid[:16], parsed.locktime, parsed.fee_rate,
             )
-        else:
-            # Normal tx or anti-fee-sniping locktime — leave as pending
+        elif category in ("past_block", "past_ts") and auto_present_past:
             log.info(
-                "Retained tx %s (%d sats fee, %.1f sat/vB, %d inputs, %d outputs)",
-                parsed.txid[:16], parsed.fee_sats, parsed.fee_rate,
-                len(parsed.inputs), len(parsed.outputs),
+                "Retained tx %s with present/past locktime=%d — auto-broadcast (proxy toggle ON)",
+                parsed.txid[:16], parsed.locktime,
+            )
+            import asyncio
+            asyncio.create_task(_fire_immediate_broadcast(parsed.txid, "present/past"))
+        elif category == "zero" and auto_zero:
+            log.info(
+                "Retained tx %s with locktime=0 — auto-broadcast (proxy toggle ON)",
+                parsed.txid[:16],
+            )
+            import asyncio
+            asyncio.create_task(_fire_immediate_broadcast(parsed.txid, "locktime=0"))
+        else:
+            log.info(
+                "Retained tx %s as pending (locktime=%d, category=%s, %d sats fee, %.1f sat/vB)",
+                parsed.txid[:16], parsed.locktime, category, parsed.fee_sats, parsed.fee_rate,
             )
 
         # Return txid to wallet (Sparrow validates this matches)

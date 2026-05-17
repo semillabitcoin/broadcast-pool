@@ -166,8 +166,10 @@ def _classify_locktime(tx, current_height: int, current_mtp: int) -> str:
     """Bucket a tx by its nLockTime relative to the current chain tip.
 
     Returns one of: "zero" | "future" | "present_past".
-    "present_past" includes the Sparrow anti-fee-sniping case (locktime == height+1)
-    because that locktime is not a real lock — broadcasting it would leave a fingerprint.
+    Threshold matches the proxy interceptor: locktime > tip is "future" (so
+    tip+1 already counts as future — the user wants no anti-fee-sniping
+    warning for txs scheduled one block ahead). Sparrow's anti-fee-sniping
+    case (locktime == tip) lands in present_past.
     """
     lt = tx.locktime or 0
     if lt <= 0:
@@ -177,7 +179,7 @@ def _classify_locktime(tx, current_height: int, current_mtp: int) -> str:
             return "present_past"
         return "future"
     # Block-height locktime
-    if current_height and lt <= current_height + 1:
+    if current_height and lt <= current_height:
         return "present_past"
     return "future"
 
@@ -262,6 +264,14 @@ async def handle_list_txs(request: web.Request) -> web.Response:
         "current_height": current_height,
         "total_pending": sum(1 for t in txs if t.status == "pending"),
         "total_scheduled": sum(1 for t in txs if t.status == "scheduled"),
+        # Toggle state needed by the UI to decide whether to render the
+        # anti-fee-sniping warning. When auto-broadcast is ON for a given
+        # locktime category, the user has already opted into the fingerprint
+        # trade-off, so the warning is suppressed.
+        "auto_broadcast_present_past_locktime":
+            store.get_state("auto_broadcast_present_past_locktime") == "true",
+        "auto_broadcast_zero_locktime":
+            store.get_state("auto_broadcast_zero_locktime") == "true",
     }
     return web.json_response(data)
 
@@ -698,6 +708,8 @@ async def handle_get_settings(request: web.Request) -> web.Response:
         "network": store.get_detected_network(),
         "npub": store.get_state("npub") or "",
         "auto_schedule_locktime": store.get_state("auto_schedule_locktime") != "false",
+        "auto_broadcast_present_past_locktime": store.get_state("auto_broadcast_present_past_locktime") == "true",
+        "auto_broadcast_zero_locktime": store.get_state("auto_broadcast_zero_locktime") == "true",
         "price_source": store.get_state("price_source") or "",
         "price_enabled": bool(store.get_state("price_source")),
         "liana_height_offset": int(store.get_state("liana_height_offset") or "0"),
@@ -931,6 +943,14 @@ async def handle_set_preferences(request: web.Request) -> web.Response:
     if "auto_schedule_locktime" in body:
         val = "true" if body["auto_schedule_locktime"] else "false"
         store.set_state("auto_schedule_locktime", val)
+
+    if "auto_broadcast_present_past_locktime" in body:
+        val = "true" if body["auto_broadcast_present_past_locktime"] else "false"
+        store.set_state("auto_broadcast_present_past_locktime", val)
+
+    if "auto_broadcast_zero_locktime" in body:
+        val = "true" if body["auto_broadcast_zero_locktime"] else "false"
+        store.set_state("auto_broadcast_zero_locktime", val)
 
     if "price_source" in body:
         source = body["price_source"].strip()

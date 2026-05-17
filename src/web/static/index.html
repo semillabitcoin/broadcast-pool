@@ -201,19 +201,38 @@
 
     <!-- 2. Behavior -->
     <div class="settings-section">
-      <h3 class="settings-title" id="set-title-behavior">2. Comportamiento</h3>
+      <h3 class="settings-title" id="set-title-behavior">2. Comportamiento de Broadcast Pool</h3>
+      <p class="settings-help" id="set-behavior-scope-note"></p>
 
       <div class="settings-subsection">
-        <strong class="settings-subsection-title" id="set-sub-locktime">A. nLockTime</strong>
-        <p class="settings-help" id="set-behavior-desc"></p>
+        <strong class="settings-subsection-title" id="set-sub-auto-future">2.1 Auto programar tx con nLockTime futuro</strong>
+        <p class="settings-help" id="set-auto-future-desc"></p>
         <label class="toggle-row">
-          <input type="checkbox" id="set-auto-locktime" onchange="savePrefAutoLocktime(this.checked)">
-          <span id="set-lbl-auto-locktime">Desactivar auto-agendado para nLocktimes futuros</span>
+          <input type="checkbox" id="set-auto-future" onchange="savePrefAutoFuture(this.checked)">
+          <span id="set-lbl-auto-future">Activar auto-programación de nLockTime futuro</span>
         </label>
       </div>
 
       <div class="settings-subsection">
-        <strong class="settings-subsection-title" id="set-sub-price">B. Retransmisión por precio</strong>
+        <strong class="settings-subsection-title" id="set-sub-auto-present-past">2.2 Auto transmitir con nLockTime presente o pasado</strong>
+        <p class="settings-help" id="set-auto-present-past-desc"></p>
+        <label class="toggle-row">
+          <input type="checkbox" id="set-auto-present-past" onchange="savePrefAutoPresentPast(this.checked)">
+          <span id="set-lbl-auto-present-past">Activar auto-transmisión para nLockTime presente o pasado</span>
+        </label>
+      </div>
+
+      <div class="settings-subsection">
+        <strong class="settings-subsection-title" id="set-sub-auto-zero">2.3 Auto transmitir con nLockTime = 0</strong>
+        <p class="settings-help" id="set-auto-zero-desc"></p>
+        <label class="toggle-row">
+          <input type="checkbox" id="set-auto-zero" onchange="savePrefAutoZero(this.checked)">
+          <span id="set-lbl-auto-zero">Activar auto-transmisión para nLockTime = 0</span>
+        </label>
+      </div>
+
+      <div class="settings-subsection">
+        <strong class="settings-subsection-title" id="set-sub-price">2.4 Retransmisión por precio</strong>
         <p class="settings-help" id="set-price-desc"></p>
         <label class="toggle-row">
           <input type="checkbox" id="set-price-enabled" onchange="togglePriceSource(this.checked)">
@@ -234,7 +253,7 @@
       </div>
 
       <div class="settings-subsection">
-        <strong class="settings-subsection-title" id="set-sub-liana">C. Altura de bloque virtual</strong>
+        <strong class="settings-subsection-title" id="set-sub-liana">2.5 Altura de bloque virtual</strong>
         <p class="settings-help" id="set-liana-desc"></p>
         <label class="toggle-row">
           <input type="checkbox" id="set-liana-enabled" onchange="toggleLianaFake(this.checked)">
