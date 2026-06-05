@@ -3,7 +3,7 @@
 Starts three asyncio components:
 1. ElectrumProxy (TCP :50005)
 2. Scheduler (block monitor + broadcast dispatcher)
-3. WebAPI (HTTP :3080)
+3. WebAPI (HTTP :4040)
 """
 
 import asyncio
