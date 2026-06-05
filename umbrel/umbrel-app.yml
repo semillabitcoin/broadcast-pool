@@ -1,53 +1,40 @@
-manifestVersion: 1.1
-id: broadcast-pool
-name: Broadcast Pool
-tagline: Proxy Electrum con broadcast programado de transacciones Bitcoin
+manifestVersion: 1
+id: semillabitcoin-broadcast-pool
 category: bitcoin
-version: "1.0.0"
-port: 3080
+name: Broadcast Pool
+version: "0.3.18"
+tagline: Schedule Bitcoin transaction broadcasts
 description: >-
-  Intercepta broadcasts de transacciones desde Sparrow, Liana u otra wallet
-  compatible con Electrum y los retiene hasta el bloque objetivo que configures.
-  Tus wallets ven las transacciones como pendientes en mempool mientras el proxy
-  las guarda localmente. Ideal para migracion de wallets y ciclado de UTXOs
-  con separacion temporal.
+  Electrum proxy that intercepts signed transactions from Sparrow, Liana or
+  manual import, retains them, and broadcasts at the target block or date
+  you configure. Ideal for wallet migrations and UTXO cycling with temporal
+  separation.
 
-  Compatible con Electrs y Fulcrum. Soporta mainnet, testnet y signet.
-  Selector de upstream configurable desde la interfaz.
+  Compatible with Electrs and Fulcrum. Supports mainnet, testnet and signet.
+  NIP-44 encrypted vault (Nostr) for confirmed transaction history.
 
-  Inspirado en la propuesta Broadcast Pool de Craig Raw (bitcoin/bitcoin#30471).
+  Inspired by Craig Raw's Broadcast Pool proposal (bitcoin/bitcoin#30471).
+releaseNotes: >-
+  v0.3.18 — Settings section 2 ("Comportamiento de Broadcast Pool") now
+  exposes three independent nLockTime auto-broadcast toggles that only
+  apply to txs intercepted via the Electrum proxy: 2.1 auto-schedule for
+  future nLockTime (ON by default), 2.2 auto-broadcast for present/past
+  nLockTime (OFF), and 2.3 auto-broadcast for nLockTime = 0 (OFF). Manual
+  imports always land as Pending. The anti-fee-sniping warning ⚠ no longer
+  appears for txs scheduled one block ahead (tip+1 now counts as future)
+  or when the user has consented via the present/past toggle. Includes a
+  research report on wallet anti-fee-sniping defaults under docs/.
 developer: Semilla Bitcoin
 website: https://semillabitcoin.com
-support: https://github.com/semillabitcoin/broadcast-pool/issues
-repo: https://github.com/semillabitcoin/broadcast-pool
-gallery: []
-releaseNotes: ""
 dependencies:
   - electrs
+repo: https://github.com/semillabitcoin/broadcast-pool
+support: https://github.com/semillabitcoin/broadcast-pool/issues
+icon: https://raw.githubusercontent.com/semillabitcoin/umbrel-app-store/main/semillabitcoin-broadcast-pool/icon.png
+port: 4040
+gallery: []
+path: ""
 defaultUsername: ""
 defaultPassword: ""
-deterministicPassword: false
-path: "/"
-torOnly: true
 submitter: Semilla Bitcoin
-submission: ""
-widgets:
-  - id: "pool-stats"
-    type: "four-stats"
-    refresh: "30s"
-    endpoint: "app:3080/api/widget/stats"
-    example:
-      type: "four-stats"
-      items:
-        - title: "Retenidas"
-          text: "3"
-          subtext: "transacciones"
-        - title: "Programadas"
-          text: "2"
-          subtext: "con bloque"
-        - title: "Altura"
-          text: "895,150"
-          subtext: "actual"
-        - title: "Conexiones"
-          text: "1"
-          subtext: "wallets"
+submission: https://github.com/semillabitcoin/umbrel-app-store

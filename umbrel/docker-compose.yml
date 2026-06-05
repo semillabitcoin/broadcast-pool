@@ -3,12 +3,12 @@ version: "3.7"
 services:
   app_proxy:
     environment:
-      APP_HOST: broadcast-pool_server_1
-      APP_PORT: 3080
+      APP_HOST: ${APP_SEMILLABITCOIN_BROADCAST_POOL_IP}
+      APP_PORT: ${APP_SEMILLABITCOIN_BROADCAST_POOL_PORT}
 
-  server:
-    image: semillabitcoin/broadcast-pool:v1.0.0@sha256:DIGEST_PLACEHOLDER
-    user: "1000:1000"
+  app:
+    image: ghcr.io/semillabitcoin/broadcast-pool:v0.3.18@sha256:2ff43b77e3a216897d8e9a0704190ba977b5ba630b4f14d22ce152ee317fc640
+    init: true
     restart: on-failure
     stop_grace_period: 1m
     ports:
@@ -19,11 +19,15 @@ services:
       ELECTRUM_HOST: ${APP_ELECTRS_NODE_IP}
       ELECTRUM_PORT: ${APP_ELECTRS_NODE_PORT}
       DB_PATH: /data/pool.db
-      WEB_PORT: "3080"
+      WEB_PORT: "4040"
+      WEB_BIND: "0.0.0.0"
       PROXY_PORT: "50005"
+      APP_SEED: ${APP_SEED}
+      APP_PASSWORD: ${APP_PASSWORD}
+      APP_HIDDEN_SERVICE: ${APP_HIDDEN_SERVICE}
     # Reach other Umbrel apps (e.g. the price oracle) via their host-published ports.
     extra_hosts:
       - "host.docker.internal:host-gateway"
     networks:
       default:
-        ipv4_address: 10.21.21.11
+        ipv4_address: ${APP_SEMILLABITCOIN_BROADCAST_POOL_IP}
