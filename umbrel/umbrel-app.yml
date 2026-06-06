@@ -2,7 +2,7 @@ manifestVersion: 1
 id: semillabitcoin-broadcast-pool
 category: bitcoin
 name: Broadcast Pool
-version: "0.3.18"
+version: "0.3.19"
 tagline: Schedule Bitcoin transaction broadcasts
 description: >-
   Electrum proxy that intercepts signed transactions from Sparrow, Liana or
@@ -15,15 +15,20 @@ description: >-
 
   Inspired by Craig Raw's Broadcast Pool proposal (bitcoin/bitcoin#30471).
 releaseNotes: >-
-  v0.3.18 — Settings section 2 ("Comportamiento de Broadcast Pool") now
-  exposes three independent nLockTime auto-broadcast toggles that only
-  apply to txs intercepted via the Electrum proxy: 2.1 auto-schedule for
-  future nLockTime (ON by default), 2.2 auto-broadcast for present/past
-  nLockTime (OFF), and 2.3 auto-broadcast for nLockTime = 0 (OFF). Manual
-  imports always land as Pending. The anti-fee-sniping warning ⚠ no longer
-  appears for txs scheduled one block ahead (tip+1 now counts as future)
-  or when the user has consented via the present/past toggle. Includes a
-  research report on wallet anti-fee-sniping defaults under docs/.
+  v0.3.19 — Collections and editable labels: group retained txs by purpose
+  (lending, inheritance, migration…) with color-coded chips, a picker to
+  assign/create/delete collections, and inline label editing. New pool
+  export format (BIP-329 dialect): unencrypted exports are standard .jsonl
+  label files readable by any wallet — committed UTXOs are marked
+  spendable:false so importing them into e.g. Sparrow freezes the reserved
+  coins. Export the whole pool or selected collections only (hand a
+  collection to another BP node). Major fix: wallet loading through the
+  proxy was processing batched requests sequentially, slowing discovery to
+  seconds per address with some setups — batches now run concurrently.
+  Privacy-preserving diagnostics report (Settings §5): shareable, covers
+  the last 10 minutes, all identifiers redacted at capture time. Passphrase
+  fields no longer trigger browser password managers. Restructured tx
+  table and rebuilt mobile/tablet layout.
 developer: Semilla Bitcoin
 website: https://semillabitcoin.com
 dependencies:
