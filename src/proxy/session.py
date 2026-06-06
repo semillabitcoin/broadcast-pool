@@ -3,12 +3,13 @@
 import asyncio
 import json
 import logging
+import time
 
 from src.proxy.interceptor import Interceptor
 from src.proxy.upstream import UpstreamConnection
 from src.pool.store import TxStore
 from src.pool.virtual_mempool import VirtualMempool
-from src import config
+from src import config, diagnostics
 
 log = logging.getLogger(__name__)
 
@@ -40,6 +41,8 @@ class ElectrumSession:
         self.subscribed_scripthashes: set[str] = set()
         # Track which client request IDs need response modification
         self._pending_methods: dict[int, tuple[str, list]] = {}
+        # Latency tracking for passthrough requests: id → (method, t0)
+        self._inflight: dict = {}
         self._closed = False
 
         # Liana height-offset state (PoC: fake future block height).
@@ -386,6 +389,8 @@ class ElectrumSession:
             log.debug("[%s] Tracking id=%s for modification (%s)", self.peer_str, msg_id, method)
 
         # --- Forward to upstream (raw, preserving client's id) ---
+        if msg_id is not None:
+            self._inflight[msg_id] = (method, time.monotonic())
         raw = json.dumps(msg) + "\n"
         await self.upstream.send_raw(raw.encode())
         return None if collect else None
@@ -395,6 +400,14 @@ class ElectrumSession:
     async def _on_upstream_response(self, msg: dict) -> None:
         """Handle a response from upstream to a client-forwarded request."""
         msg_id = msg.get("id")
+
+        # Latency stats for the diagnostics report (method name + ms only)
+        inflight = self._inflight.pop(msg_id, None) if msg_id is not None else None
+        if inflight:
+            method_name, t0 = inflight
+            diagnostics.record_upstream_call(
+                method_name, (time.monotonic() - t0) * 1000, ok="error" not in msg
+            )
 
         # Check if we need to modify this response
         if msg_id is not None and msg_id in self._pending_methods:
@@ -457,56 +470,71 @@ class ElectrumSession:
 
     # ---- Batch requests ----
 
+    async def _process_batch_item(self, msg: dict) -> dict:
+        """Process one item of a JSON-RPC batch and return its response."""
+        method = msg.get("method", "")
+        params = msg.get("params", [])
+        msg_id = msg.get("id")
+
+        if method == "blockchain.transaction.broadcast":
+            return await self.interceptor.intercept_broadcast(params, msg_id)
+
+        if method == "blockchain.transaction.get" and params:
+            # Check if this is a retained tx
+            retained = self.store.get_tx(params[0])
+            verbose = params[1] if len(params) > 1 else False
+            if retained and retained.status in ("pending", "scheduled", "broadcasting") and not verbose:
+                return {"jsonrpc": "2.0", "result": self.store.get_raw_hex(retained.txid), "id": msg_id}
+            # verbose / not retained: fall through to upstream
+
+        try:
+            upstream_resp = await self.upstream.call(method, params)
+            upstream_resp["id"] = msg_id
+
+            scripthash = params[0] if params else ""
+            if method == "blockchain.scripthash.subscribe" and params:
+                self.subscribed_scripthashes.add(scripthash)
+            if method == "blockchain.scripthash.get_history":
+                upstream_resp = self.interceptor.modify_get_history(upstream_resp, scripthash)
+            elif method == "blockchain.scripthash.listunspent":
+                upstream_resp = self.interceptor.modify_listunspent(upstream_resp, scripthash)
+            elif method == "blockchain.scripthash.subscribe":
+                upstream_resp = await self.interceptor.modify_subscribe_response(upstream_resp, scripthash)
+
+            return upstream_resp
+        except Exception as e:
+            log.warning("[%s] Batch item %s failed: %s", self.peer_str, method, e)
+            return {"jsonrpc": "2.0", "error": {"code": -1, "message": "Request failed"}, "id": msg_id}
+
     async def _handle_batch(self, line_str: str) -> None:
-        """Handle a JSON-RPC batch request."""
+        """Handle a JSON-RPC batch request.
+
+        Items are dispatched concurrently (the upstream connection pipelines by
+        request id), preserving response order. Sequential processing here used
+        to cost one full round-trip per item — with wallet discovery batches of
+        hundreds of scripthashes that turned loading into minutes. Batches that
+        contain broadcasts stay sequential: parent/child (CPFP) order matters.
+        """
         try:
             batch = json.loads(line_str)
         except json.JSONDecodeError:
             return
 
         log.debug("[%s] Batch request: %d items", self.peer_str, len(batch))
+        methods = [m.get("method", "?") for m in batch]
+        diagnostics.event(
+            f"wallet batch: {len(batch)} items ({', '.join(sorted(set(methods))[:5])})"
+        )
 
-        responses = []
-        for msg in batch:
-            method = msg.get("method", "")
-            params = msg.get("params", [])
-            msg_id = msg.get("id")
-
-            resp = None
-
-            if method == "blockchain.transaction.broadcast":
-                resp = await self.interceptor.intercept_broadcast(params, msg_id)
-            elif method == "blockchain.transaction.get" and params:
-                # Check if this is a retained tx
-                retained = self.store.get_tx(params[0])
-                verbose = params[1] if len(params) > 1 else False
-                if retained and retained.status in ("pending", "scheduled", "broadcasting") and not verbose:
-                    resp = {"jsonrpc": "2.0", "result": self.store.get_raw_hex(retained.txid), "id": msg_id}
-                else:
-                    resp = None  # Fall through to upstream below
-
-            if resp is None:
-                try:
-                    upstream_resp = await self.upstream.call(method, params)
-                    upstream_resp["id"] = msg_id
-
-                    scripthash = params[0] if params else ""
-                    if method == "blockchain.scripthash.subscribe" and params:
-                        self.subscribed_scripthashes.add(scripthash)
-                    if method == "blockchain.scripthash.get_history":
-                        upstream_resp = self.interceptor.modify_get_history(upstream_resp, scripthash)
-                    elif method == "blockchain.scripthash.listunspent":
-                        upstream_resp = self.interceptor.modify_listunspent(upstream_resp, scripthash)
-                    elif method == "blockchain.scripthash.subscribe":
-                        upstream_resp = await self.interceptor.modify_subscribe_response(upstream_resp, scripthash)
-
-                    resp = upstream_resp
-                except Exception as e:
-                    log.warning("[%s] Batch item %s failed: %s", self.peer_str, method, e)
-                    log.warning("[%s] Batch item %s error: %s", self.peer_str, method, e)
-                    resp = {"jsonrpc": "2.0", "error": {"code": -1, "message": "Request failed"}, "id": msg_id}
-
-            responses.append(resp)
+        has_broadcast = any(m == "blockchain.transaction.broadcast" for m in methods)
+        if has_broadcast:
+            responses = []
+            for msg in batch:
+                responses.append(await self._process_batch_item(msg))
+        else:
+            responses = list(await asyncio.gather(
+                *(self._process_batch_item(msg) for msg in batch)
+            ))
 
         if responses:
             out = json.dumps(responses) + "\n"

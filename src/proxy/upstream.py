@@ -4,6 +4,9 @@ import asyncio
 import json
 import logging
 import ssl
+import time
+
+from src import diagnostics
 
 log = logging.getLogger(__name__)
 
@@ -86,7 +89,16 @@ class UpstreamConnection:
 
         log.debug(">> upstream [internal id=%d] %s(params=%d)", msg_id, method, len(params))
 
-        return await asyncio.wait_for(future, timeout=30.0)
+        start = time.monotonic()
+        try:
+            resp = await asyncio.wait_for(future, timeout=30.0)
+        except Exception:
+            diagnostics.record_upstream_call(method, (time.monotonic() - start) * 1000, ok=False)
+            raise
+        diagnostics.record_upstream_call(
+            method, (time.monotonic() - start) * 1000, ok="error" not in resp
+        )
+        return resp
 
     async def send_raw(self, data: bytes) -> None:
         """Send raw bytes to upstream (for forwarding client requests as-is)."""

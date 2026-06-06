@@ -28,6 +28,11 @@ logging.basicConfig(
 )
 log = logging.getLogger("broadcast-pool")
 
+# Diagnostics: keep a sanitized in-memory tail of all logs for the
+# downloadable report (Settings → Descargar diagnóstico).
+from src import diagnostics  # noqa: E402
+logging.getLogger().addHandler(diagnostics.ring_handler)
+
 
 async def main():
     log.info("Starting Broadcast Pool")
