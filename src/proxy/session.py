@@ -120,7 +120,28 @@ class ElectrumSession:
                 log.info("[%s] Client disconnected (EOF)", self.peer_str)
                 break
 
-            line_str = line.decode().strip()
+            # A TLS ClientHello starts with 0x16 0x03: the wallet has SSL
+            # enabled against BP's plain-TCP proxy port. Without this check it
+            # surfaced as a cryptic utf-8 decode error here, while the wallet
+            # showed "Remote host terminated the handshake".
+            if len(line) >= 2 and line[0] == 0x16 and line[1] == 0x03:
+                log.warning(
+                    "[%s] Wallet attempted an SSL/TLS handshake — BP's proxy "
+                    "port is plain TCP. Disable SSL in the wallet (use tcp:// "
+                    "instead of ssl://) and reconnect.",
+                    self.peer_str,
+                )
+                break
+
+            try:
+                line_str = line.decode().strip()
+            except UnicodeDecodeError:
+                log.warning(
+                    "[%s] Non-text data from client (%d bytes) — not an "
+                    "Electrum JSON-RPC stream. Closing session.",
+                    self.peer_str, len(line),
+                )
+                break
             if not line_str:
                 continue
 
