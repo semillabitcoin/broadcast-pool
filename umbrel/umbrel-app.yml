@@ -2,7 +2,7 @@ manifestVersion: 1
 id: semillabitcoin-broadcast-pool
 category: bitcoin
 name: Broadcast Pool
-version: "0.3.19"
+version: "0.3.20"
 tagline: Schedule Bitcoin transaction broadcasts
 description: >-
   Electrum proxy that intercepts signed transactions from Sparrow, Liana or
@@ -15,20 +15,17 @@ description: >-
 
   Inspired by Craig Raw's Broadcast Pool proposal (bitcoin/bitcoin#30471).
 releaseNotes: >-
-  v0.3.19 — Collections and editable labels: group retained txs by purpose
-  (lending, inheritance, migration…) with color-coded chips, a picker to
-  assign/create/delete collections, and inline label editing. New pool
-  export format (BIP-329 dialect): unencrypted exports are standard .jsonl
-  label files readable by any wallet — committed UTXOs are marked
-  spendable:false so importing them into e.g. Sparrow freezes the reserved
-  coins. Export the whole pool or selected collections only (hand a
-  collection to another BP node). Major fix: wallet loading through the
-  proxy was processing batched requests sequentially, slowing discovery to
-  seconds per address with some setups — batches now run concurrently.
-  Privacy-preserving diagnostics report (Settings §5): shareable, covers
-  the last 10 minutes, all identifiers redacted at capture time. Passphrase
-  fields no longer trigger browser password managers. Restructured tx
-  table and rebuilt mobile/tablet layout.
+  v0.3.20 — Reliability fixes driven by the first field diagnostics
+  reports. Slow Electrum servers no longer stall wallet sync: header
+  downloads get a 120s budget (the previous flat 30s timeout aborted
+  Sparrow's initial sync on busy nodes). The dashboard now reports real
+  upstream connectivity — the status bar and connect banner reflect
+  disconnects within seconds instead of showing stale state. Fixed a
+  scheduler race when saving Electrum settings that logged
+  "NoneType object has no attribute call". The Pool tab refreshes
+  immediately when opened. Includes everything from v0.3.19:
+  collections, BIP-329 export, selective export, diagnostics report,
+  and the batched-request performance fix.
 developer: Semilla Bitcoin
 website: https://semillabitcoin.com
 dependencies:
