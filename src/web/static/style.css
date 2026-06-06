@@ -157,6 +157,11 @@ h1 { font-size: 24px; font-weight: 600; margin-bottom: 4px; }
 .inline-edit.input-xl { width: 100%; min-width: 0; flex: 1 1 auto; }
 .input-mono { font-family: 'SF Mono','Fira Code',monospace; font-size: 12px; }
 
+/* Passphrase fields are type="text" masked via CSS so browser password
+   managers never see a password field (they ignore autocomplete="off" on
+   type="password"). JS falls back to type="password" where unsupported. */
+.masked-input { -webkit-text-security: disc; }
+
 /* Checkbox row helper */
 .checkbox-row { display: flex; align-items: center; gap: var(--space-2); font-size: 13px; cursor: pointer; }
 
@@ -426,15 +431,24 @@ button:disabled { opacity: 0.4; cursor: not-allowed; }
 .action-icon {
   cursor: pointer;
   opacity: 0.35;
-  padding: 4px;
+  padding: 0;
+  width: 24px;
+  height: 24px;
   transition: opacity 0.15s;
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   vertical-align: middle;
 }
 .action-icon:hover { opacity: 1; }
 .action-icon.send:hover svg { fill: var(--green); }
 .action-icon.delete:hover svg { fill: var(--red); }
+.action-icon.edit:hover svg { fill: var(--orange); }
+.pencil-icon {
+  width: 16px;
+  height: 16px;
+  fill: var(--text-muted);
+}
 .plane-icon, .x-icon {
   width: 16px;
   height: 16px;
@@ -450,15 +464,90 @@ button:disabled { opacity: 0.4; cursor: not-allowed; }
   table-layout: fixed;
 }
 /* Column widths — shared between active and history tables */
-.tx-table .col-txid    { width: 16%; }
+.tx-table .col-txid    { width: 9%; }
 .tx-table .col-type    { width: 7%; }
-.tx-table .col-wallet  { width: 8%; }
+.tx-table .col-coll    { width: 10%; }
+.tx-table .col-wallet  { width: 14%; }
+.cell-label {
+  font-size: 13px;
+  text-align: left !important;
+  min-width: 170px;
+  max-width: 210px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.cell-label-edit { cursor: text; }
+.cell-label-edit:hover { color: var(--text); text-decoration: underline dotted var(--text-muted); text-underline-offset: 3px; }
+/* Doubled specificity: .inline-edit base (width 90px) is declared later in
+   the file and would win otherwise. The input must fill the label cell so
+   editing reflects the exact space the text will occupy. */
+.inline-edit.label-input {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 4px 6px;
+  font-size: 13px;
+  font-family: inherit;
+}
+
+/* Collection picker popover */
+.coll-popover {
+  position: absolute;
+  z-index: 60;
+  min-width: 200px;
+  max-width: 280px;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.5);
+}
+.coll-pop-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+.coll-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 2px 8px 2px 10px;
+  font-size: 13px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  color: var(--text-muted);
+  cursor: pointer;
+  white-space: nowrap;
+  max-width: 240px;
+}
+.coll-pill:hover { filter: brightness(1.35); }
+.coll-pill.is-current { box-shadow: 0 0 0 1px var(--text-muted); font-weight: 600; }
+.coll-pill-name { overflow: hidden; text-overflow: ellipsis; }
+.coll-pill-x {
+  font-size: 13px;
+  line-height: 1;
+  opacity: 0.5;
+  font-weight: 400;
+}
+.coll-pill-x:hover { opacity: 1; color: var(--red); }
+.coll-pop-row { display: flex; align-items: center; gap: 12px; }
+.coll-pop-input { flex: 1; min-width: 110px; padding: 5px 8px; font-size: 12px; }
+.coll-pop-clear {
+  font-size: 12px;
+  color: var(--text-muted);
+  cursor: pointer;
+  white-space: nowrap;
+}
+.coll-pop-clear:hover { color: var(--red); }
 .tx-table .col-amount  { width: 13%; }
 .tx-table .col-feerate { width: 9%; }
 .tx-table .col-age     { width: 10%; }
 .tx-table .col-status  { width: 12%; }
-.tx-table .col-target  { width: 18%; }
-.tx-table .col-actions { width: 7%; }
+.tx-table .col-target  { width: 17%; }
+/* Fixed table layout: width must fit 3×24px icon boxes + 12/8px padding,
+   or the right-aligned icons overflow the cell over the right padding. */
+.tx-table .col-actions { width: 9%; }
 .tx-table th {
   text-align: center;
   padding: 10px 12px;
@@ -641,13 +730,42 @@ select.inline-edit { padding-right: var(--space-3); height: var(--input-h); }
 
 /* Cell tweaks */
 .cell-tags { font-size: 12px; color: var(--text-muted); max-width: 80px; }
+
+/* Collection chip (grouping field, own column) — same text size as labels */
+.coll-chip {
+  display: inline-block;
+  padding: 1px 9px;
+  font-size: 13px;
+  line-height: 19px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  color: var(--text-muted);
+  background: var(--bg-card);
+  max-width: 130px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  vertical-align: middle;
+}
+.coll-chip.coll-editable { cursor: pointer; }
+.coll-chip.coll-editable:hover { border-color: var(--text-muted); color: var(--text); }
+.coll-chip.coll-empty {
+  cursor: pointer;
+  opacity: 0.25;
+  padding: 0 7px;
+}
+tr:hover .coll-chip.coll-empty { opacity: 0.6; }
+.coll-chip.coll-empty:hover { opacity: 1; border-color: var(--text-muted); color: var(--text); }
 .cell-amount { white-space: nowrap; text-align: right; font-variant-numeric: tabular-nums; }
 .amt-num { }
 .amt-whole { text-align: right; }
 .amt-dot { }
 .amt-dec { text-align: left; }
 .amt-unit { color: var(--text-muted); font-size: 11px; margin-left: 4px; }
-.cell-actions { white-space: nowrap; text-align: center; }
+/* Right-aligned so the last icon ends at the same 12px the TXID column
+   starts with on the left. The 24px icon box carries ~4px of air around
+   its 16px glyph, so the cell uses 8px right padding: 8 + 4 = 12. */
+.cell-actions { white-space: nowrap; text-align: right; padding-right: 8px !important; }
 
 /* Alerts */
 .alert {
@@ -703,22 +821,43 @@ select.inline-edit { padding-right: var(--space-3); height: var(--input-h); }
   color: var(--text-muted);
 }
 .bp-footer a { color: var(--blue); text-decoration: none; }
+
+/* In-content links (Cómo funciona, settings help) follow BP's blue */
+.settings-help a {
+  color: var(--blue);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.settings-help a:hover { filter: brightness(1.3); }
 .bp-footer a:hover { text-decoration: underline; }
 .bp-footer p { margin: 4px 0; }
 
 /* Responsive — tablet: drop "Tipo" (col 2) and "Wallet" (col 3) */
+/* Tablet: drop "Fee rate" (5) and "Edad moneda" (6) — Colección (2) and
+   Label (3) stay visible, they're the user-facing organization fields. */
 @media (max-width: 1024px) {
-  .tx-table th:nth-child(2),
-  .tx-table td:nth-child(2),
-  .tx-table th:nth-child(3),
-  .tx-table td:nth-child(3) {
+  .tx-table th:nth-child(5),
+  .tx-table td:nth-child(5),
+  .tx-table th:nth-child(6),
+  .tx-table td:nth-child(6) {
     display: none;
   }
-  /* No horizontal scroll needed at this width with 7 columns */
+  /* Re-spread the freed 19% across the visible columns — with fixed
+     table-layout the leftover would otherwise pool into the unsized
+     lock column, blowing it up to ~16% of the width. */
+  .tx-table .col-txid    { width: 11%; }
+  .tx-table .col-coll    { width: 12%; }
+  .tx-table .col-wallet  { width: 17%; }
+  .tx-table .col-amount  { width: 15%; }
+  .tx-table .col-status  { width: 14%; }
+  .tx-table .col-target  { width: 19%; }
+  .tx-table .col-actions { width: 11%; }
+  /* No horizontal scroll needed at this width with 8 columns */
   #tx-container, #confirmed-section, #vault-content { overflow-x: visible; }
 }
 
-/* Responsive — mobile: also drop "Fee rate" (col 5) and "Edad moneda" (col 6) */
+/* Responsive — mobile: keep every column (Colección included) with
+   deterministic px widths + horizontal scroll as the escape hatch. */
 @media (max-width: 768px) {
   body { padding: 12px; }
   h1 { font-size: 20px; }
@@ -734,14 +873,24 @@ select.inline-edit { padding-right: var(--space-3); height: var(--input-h); }
   .actions-bar { font-size: 12px; gap: 8px; flex-wrap: wrap; }
   .actions-bar button { font-size: 12px; padding: 6px 10px; }
 
-  .tx-table { font-size: 12px; table-layout: auto; }
+  /* Fixed layout + px widths: predictable truncation (auto layout let the
+     label's min-width blow the table up and squeezed the txid to 2 chars) */
+  .tx-table { font-size: 12px; table-layout: fixed; min-width: 678px; }
   .tx-table th, .tx-table td { padding: 6px 8px; white-space: nowrap; }
-  .tx-table th:nth-child(5),
-  .tx-table td:nth-child(5),
-  .tx-table th:nth-child(6),
-  .tx-table td:nth-child(6) {
-    display: none;
-  }
+  .tx-table .col-txid    { width: 58px; }   /* ≥4 chars + ellipsis at 12px mono */
+  .tx-table .col-coll    { width: 78px; }
+  .tx-table .col-wallet  { width: 106px; }
+  .tx-table .col-amount  { width: 102px; }
+  /* Wide enough for the PROGRAMADA badge — .cell-status overflows visibly,
+     so an undersized column lets the badge invade the lock cell. */
+  .tx-table .col-status  { width: 104px; }
+  .tx-table .col-target  { width: 128px; }
+  .tx-table .col-actions { width: 74px; }
+  .badge { padding: 2px 6px; font-size: 10px; letter-spacing: 0.2px; }
+  td.txid-copy { overflow: hidden; text-overflow: ellipsis; }
+  .cell-label { min-width: 0; max-width: none; }
+  .coll-chip { max-width: 68px; font-size: 11px; line-height: 17px; padding: 0 6px; }
+  .cell-target { min-width: 0; }
   /* Re-enable horizontal scroll as a last-resort safety net */
   #tx-container, #confirmed-section, #vault-content {
     overflow-x: auto;
@@ -757,10 +906,8 @@ select.inline-edit { padding-right: var(--space-3); height: var(--input-h); }
 
 /* Very narrow: hide TxID column too — pool becomes Monto + Estado + Retransmitir + Acciones */
 @media (max-width: 480px) {
-  .tx-table th:nth-child(1),
-  .tx-table td:nth-child(1) {
-    display: none;
-  }
+  /* TXID stays visible (≥4 chars + ellipsis); the table scrolls horizontally */
   .tx-table { font-size: 11px; }
   .tx-table th, .tx-table td { padding: 4px 6px; }
+  .tx-table .col-txid { width: 58px; }
 }

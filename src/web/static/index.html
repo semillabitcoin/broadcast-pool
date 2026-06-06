@@ -110,15 +110,15 @@
         <thead>
           <tr>
             <th class="sortable col-txid" onclick="sortBy('created_at')" id="th-txid">TxID <span class="sort-arrow" id="sort-created_at"></span></th>
-            <th class="sortable col-type" onclick="sortBy('tx_tags')" id="th-type">Tipo <span class="sort-arrow" id="sort-tx_tags"></span></th>
-            <th class="sortable col-wallet" onclick="sortBy('wallet_label')" id="th-wallet">Wallet <span class="sort-arrow" id="sort-wallet_label"></span></th>
+            <th class="sortable col-coll" onclick="sortBy('collection')" id="th-collection">Colección <span class="sort-arrow" id="sort-collection"></span></th>
+            <th class="sortable col-wallet" onclick="sortBy('wallet_label')" id="th-wallet">Label <span class="sort-arrow" id="sort-wallet_label"></span></th>
             <th class="sortable col-amount" onclick="sortBy('amount_sats')" id="th-amount">Monto <span class="sort-arrow" id="sort-amount_sats"></span></th>
             <th class="sortable col-feerate" onclick="sortBy('fee_rate')" id="th-feerate">Fee rate <span class="sort-arrow" id="sort-fee_rate"></span></th>
             <th class="sortable col-age" onclick="sortBy('oldest_coin_age')" id="th-coinage">Edad moneda <span class="sort-arrow" id="sort-oldest_coin_age"></span></th>
             <th class="sortable col-status" onclick="sortBy('status')" id="th-status">Estado <span class="sort-arrow" id="sort-status"></span></th>
             <th class="col-status-icon" aria-hidden="true"></th>
             <th class="sortable col-target" onclick="sortBy('target_block')" id="th-target" title="">Retransmitir en <span class="sort-arrow" id="sort-target_block"></span></th>
-            <th class="col-actions" id="th-actions" style="text-align:center">Acciones</th>
+            <th class="col-actions" id="th-actions" style="text-align:right">Acciones</th>
           </tr>
         </thead>
         <tbody id="tx-body"></tbody>
@@ -311,6 +311,12 @@
         </select>
       </div>
     </div>
+
+    <div class="settings-section">
+      <h3 class="settings-title" id="set-title-diag">5. Diagnóstico</h3>
+      <p class="settings-help" id="set-diag-help">Si algo no funciona (la wallet no carga, no aparecen monedas…), reproduce el problema y descarga este informe para compartirlo al pedir ayuda. Solo cubre los últimos 10 minutos y no contiene información sensible: txids, direcciones, hashes, claves e IPs se eliminan antes de guardarse — solo incluye nombres de métodos Electrum, latencias, contadores y errores.</p>
+      <button id="btn-diagnostics" onclick="window.location='/api/diagnostics'">Descargar diagnóstico</button>
+    </div>
   </div>
 
   <!-- ===================== VAULT TAB ===================== -->
@@ -374,6 +380,20 @@
       <h3 id="export-modal-title">Exportar pool</h3>
       <p class="modal-card-help" id="export-modal-help">Elige cómo cifrar el archivo. El export incluye solo transacciones activas (pending + scheduled).</p>
 
+      <div class="radio-stack" id="export-scope-stack">
+        <label class="checkbox-row">
+          <input type="radio" name="export-scope" value="all" checked onchange="updateExportScope()">
+          <span id="export-scope-all">Todo el pool</span>
+        </label>
+        <label class="checkbox-row" id="export-scope-coll-row">
+          <input type="radio" name="export-scope" value="collections" onchange="updateExportScope()">
+          <span id="export-scope-coll">Solo colecciones seleccionadas</span>
+        </label>
+      </div>
+      <div id="export-collections-list" class="form-stack" style="display:none; flex-direction:row; flex-wrap:wrap; gap:8px;"></div>
+
+      <hr style="border:none; border-top:1px solid var(--border); margin:4px 0">
+
       <div class="radio-stack">
         <label class="checkbox-row">
           <input type="radio" name="export-method" value="passphrase" checked onchange="updateExportMethod()">
@@ -389,13 +409,14 @@
         </label>
       </div>
 
-      <form id="export-passphrase-fields" class="form-stack" autocomplete="off" onsubmit="return false">
-        <input type="text" name="username" style="display:none" tabindex="-1" autocomplete="username" aria-hidden="true">
-        <input type="password" name="password" style="display:none" tabindex="-1" autocomplete="current-password" aria-hidden="true">
-        <input type="password" id="export-passphrase" name="bp-export-key" class="inline-edit input-xl input-mono" placeholder="Passphrase (mín 8)" autocomplete="off" data-lpignore="true" data-1p-ignore="true">
-        <input type="password" id="export-passphrase-confirm" name="bp-export-key-confirm" class="inline-edit input-xl input-mono" placeholder="Confirma passphrase" autocomplete="off" data-lpignore="true" data-1p-ignore="true">
+      <!-- Deliberately NOT a <form> and NOT type="password": browser password
+           managers hook both. Masking is done in CSS (-webkit-text-security);
+           a JS fallback switches to type=password where unsupported (Firefox). -->
+      <div id="export-passphrase-fields" class="form-stack">
+        <input type="text" id="export-passphrase" name="bp-x1" class="inline-edit input-xl input-mono masked-input" placeholder="Passphrase (mín 8)" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" data-lpignore="true" data-1p-ignore="true" data-bwignore="true">
+        <input type="text" id="export-passphrase-confirm" name="bp-x2" class="inline-edit input-xl input-mono masked-input" placeholder="Confirma passphrase" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" data-lpignore="true" data-1p-ignore="true" data-bwignore="true">
         <p class="form-note"><strong id="export-passphrase-warn">⚠ Si pierdes la passphrase, el archivo es irrecuperable.</strong></p>
-      </form>
+      </div>
 
       <div id="export-nip44-fields" class="form-stack" style="display:none">
         <p class="form-note" id="export-nip44-help" style="margin:0">Se cifrará con la npub configurada en BP. Para descifrar al importar necesitarás una extensión NIP-07 (Alby, nos2x).</p>
@@ -424,11 +445,9 @@
         <p class="modal-card-help" id="import-modal-help">Selecciona un archivo .bp exportado anteriormente.</p>
         <div class="form-stack">
           <input type="file" id="import-file" class="file-input" accept=".bp,.json,application/json,application/octet-stream" onchange="onImportFileChosen(this)">
-          <form id="import-passphrase-row" style="display:none" autocomplete="off" onsubmit="return false">
-            <input type="text" name="username" style="display:none" tabindex="-1" autocomplete="username" aria-hidden="true">
-            <input type="password" name="password" style="display:none" tabindex="-1" autocomplete="current-password" aria-hidden="true">
-            <input type="password" id="import-passphrase" name="bp-import-key" class="inline-edit input-xl input-mono" placeholder="Passphrase del archivo" autocomplete="off" data-lpignore="true" data-1p-ignore="true">
-          </form>
+          <div id="import-passphrase-row" style="display:none">
+            <input type="text" id="import-passphrase" name="bp-x3" class="inline-edit input-xl input-mono masked-input" placeholder="Passphrase del archivo" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" data-lpignore="true" data-1p-ignore="true" data-bwignore="true">
+          </div>
           <div id="import-nip44-row" style="display:none">
             <p class="form-note" id="import-nip44-help" style="margin:0">Archivo cifrado NIP-44 — se requiere extensión NIP-07 (Alby/nos2x) para descifrar.</p>
           </div>

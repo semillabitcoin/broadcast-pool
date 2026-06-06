@@ -31,7 +31,7 @@ const i18n = {
     other: 'Otro',
     noTxTitle: 'Sin transacciones',
     noTxDesc: 'Conecta Sparrow o Liana a umbrel.local:50005 y envia una transaccion',
-    thTxid: 'TxID', thType: 'Tipo', thWallet: 'Wallet', thAmount: 'Monto',
+    thTxid: 'TxID', thType: 'Tipo', thCollection: 'Colección', thWallet: 'Label', thAmount: 'Monto',
     thFeeRate: 'Fee rate', thCoinAge: 'Edad moneda', thStatus: 'Estado',
     thTarget: 'Retransmitir en', thActions: 'Acciones', thBlock: 'Bloque',
     confirmed_title: 'Retransmitidas \u00faltimo bloque',
@@ -50,6 +50,9 @@ const i18n = {
     setUpstreamDesc: 'BP reenvía las txs a través de este servidor. También consulta altura de bloque y MTP para evaluar locktimes.',
     setVault: '3. B\u00f3veda cifrada (Nostr)',
     setPrefs: '4. Otras preferencias', setBehavior: '2. Comportamiento de Broadcast Pool',
+    setDiag: '5. Diagnóstico',
+    setDiagHelp: 'Si algo no funciona (la wallet no carga, no aparecen monedas…), reproduce el problema y descarga este informe para compartirlo al pedir ayuda. Solo cubre los últimos 10 minutos y no contiene información sensible: txids, direcciones, hashes, claves e IPs se eliminan antes de guardarse — solo incluye nombres de métodos Electrum, latencias, contadores y errores.',
+    setDiagBtn: 'Descargar diagnóstico',
     setBehaviorScopeNote: 'Estas reglas solo aplican a txs interceptadas a trav\u00e9s del proxy Electrum. Las introducidas manualmente (Importar TX \u270d\ufe0f) siempre quedan en Pendiente.', setLang: 'Idioma', setUnit: 'Unidad', setPort: 'Puerto',
     setNpubHelp: 'BP purga las txs confirmadas tras 1 bloque. Configura un npub para archivarlas cifradas \u2014 solo descifrable con una extensi\u00f3n NIP-07 (Alby, nos2x).',
     setNpubWarn: 'Nota: usa un npub burner \u2014 no asocies tu nym principal a tu actividad de tx bitcoin.',
@@ -100,6 +103,8 @@ const i18n = {
     exportNoneWarn: '⚠ El archivo contendrá tus transacciones firmadas en claro. Cualquiera con acceso podrá verlas y retransmitirlas.',
     exportNoneAck: 'Entiendo y quiero exportar sin cifrar',
     exportNoneAckRequired: 'Marca la casilla de confirmación',
+    exportScopeAll: 'Todo el pool', exportScopeColl: 'Solo colecciones seleccionadas',
+    exportNoCollSelected: 'Selecciona al menos una colección',
     exportPassphrasePlaceholder: 'Passphrase (m\u00edn 8)',
     exportPassphraseConfirmPlaceholder: 'Confirma passphrase',
     exportPassphraseWarn: '\u26a0 Si pierdes la passphrase, el archivo es irrecuperable.',
@@ -107,7 +112,7 @@ const i18n = {
     exportNip44NoNpub: 'No tienes npub configurada. Config\u00farala en la secci\u00f3n B\u00f3veda.',
     btnCancel: 'Cancelar', btnDownload: 'Descargar', btnAnalyze: 'Analizar', btnImport: 'Importar',
     importModalTitle: 'Importar pool',
-    importModalHelp: 'Selecciona un archivo .bp exportado anteriormente.',
+    importModalHelp: 'Selecciona un archivo .bp o .jsonl exportado anteriormente.',
     importPassphrasePlaceholder: 'Passphrase del archivo',
     importNip44Help: 'Archivo cifrado NIP-44 \u2014 se requiere extensi\u00f3n NIP-07 (Alby/nos2x) para descifrar.',
     importPassphraseMismatch: 'Las passphrases no coinciden',
@@ -154,7 +159,7 @@ const i18n = {
     other: 'Other',
     noTxTitle: 'No transactions',
     noTxDesc: 'Connect Sparrow or Liana to umbrel.local:50005 and send a transaction',
-    thTxid: 'TxID', thType: 'Type', thWallet: 'Wallet', thAmount: 'Amount',
+    thTxid: 'TxID', thType: 'Type', thCollection: 'Collection', thWallet: 'Label', thAmount: 'Amount',
     thFeeRate: 'Fee rate', thCoinAge: 'Coin age', thStatus: 'Status',
     thTarget: 'Broadcast at', thActions: 'Actions', thBlock: 'Block',
     confirmed_title: 'Broadcast last block',
@@ -173,6 +178,9 @@ const i18n = {
     setUpstreamDesc: 'BP relays txs through this server. It also queries block height and MTP to evaluate locktimes.',
     setVault: '3. Encrypted vault (Nostr)',
     setPrefs: '4. Other preferences', setLang: 'Language', setUnit: 'Unit', setPort: 'Port',
+    setDiag: '5. Diagnostics',
+    setDiagHelp: 'If something is not working (wallet won\'t load, coins don\'t show up…), reproduce the issue and download this report to share it when asking for help. It only covers the last 10 minutes and contains no sensitive information: txids, addresses, hashes, keys and IPs are stripped before being stored — only Electrum method names, latencies, counters and errors are included.',
+    setDiagBtn: 'Download diagnostics',
     setNpubHelp: 'BP purges confirmed txs after 1 block. Set an npub to archive them encrypted — only decryptable with a NIP-07 extension (Alby, nos2x).',
     setNpubWarn: 'Tip: use a burner npub — don\'t link your main nym to your Bitcoin tx activity.',
     testConn: 'Test connection',
@@ -222,6 +230,8 @@ const i18n = {
     exportNoneWarn: '⚠ The file will contain your signed transactions in clear text. Anyone with access can see and rebroadcast them.',
     exportNoneAck: 'I understand and want to export unencrypted',
     exportNoneAckRequired: 'Check the acknowledgement box',
+    exportScopeAll: 'Whole pool', exportScopeColl: 'Selected collections only',
+    exportNoCollSelected: 'Select at least one collection',
     exportPassphrasePlaceholder: 'Passphrase (min 8)',
     exportPassphraseConfirmPlaceholder: 'Confirm passphrase',
     exportPassphraseWarn: '⚠ If you lose the passphrase, the file is unrecoverable.',
@@ -229,7 +239,7 @@ const i18n = {
     exportNip44NoNpub: 'No npub configured. Set one in the Vault section.',
     btnCancel: 'Cancel', btnDownload: 'Download', btnAnalyze: 'Analyze', btnImport: 'Import',
     importModalTitle: 'Import pool',
-    importModalHelp: 'Pick a .bp file you exported before.',
+    importModalHelp: 'Pick a .bp or .jsonl file you exported before.',
     importPassphrasePlaceholder: 'File passphrase',
     importNip44Help: 'NIP-44 encrypted file — you need a NIP-07 extension (Alby/nos2x) to decrypt.',
     importPassphraseMismatch: 'Passphrases do not match',
@@ -297,6 +307,9 @@ function applyLang() {
   document.getElementById('set-upstream-desc').textContent = t('setUpstreamDesc');
   document.getElementById('set-title-vault').textContent = t('setVault');
   document.getElementById('set-title-prefs').textContent = t('setPrefs');
+  document.getElementById('set-title-diag').textContent = t('setDiag');
+  document.getElementById('set-diag-help').textContent = t('setDiagHelp');
+  document.getElementById('btn-diagnostics').textContent = t('setDiagBtn');
   if (typeof applyExportImportI18n === 'function') applyExportImportI18n();
   document.getElementById('set-npub-help').textContent = t('setNpubHelp');
   document.getElementById('set-npub-warn').textContent = t('setNpubWarn');
@@ -351,7 +364,7 @@ function applyLang() {
   document.getElementById('empty-desc').textContent = t('noTxDesc');
 
   document.getElementById('th-txid').textContent = t('thTxid');
-  document.getElementById('th-type').textContent = t('thType');
+  document.getElementById('th-collection').textContent = t('thCollection');
   document.getElementById('th-wallet').textContent = t('thWallet');
   document.getElementById('th-amount').textContent = t('thAmount');
   document.getElementById('th-feerate').textContent = t('thFeeRate');
@@ -369,6 +382,11 @@ function applyLang() {
     ? 'Bloque en el que se retransmitira la tx a la red Bitcoin'
     : 'Block at which the tx will be broadcast to the Bitcoin network';
   document.getElementById('th-target').title = targetTip;
+
+  const collTip = lang === 'es'
+    ? 'Agrupa por tipo las transacciones bloqueadas en BP (p. ej. lending, herencia, migración). Las colecciones se incluyen en el export del pool.'
+    : 'Groups the transactions held in BP by type (e.g. lending, inheritance, migration). Collections are included in the pool export.';
+  document.getElementById('th-collection').title = collTip;
 }
 
 async function fetchJSON(url, opts) {
@@ -382,7 +400,9 @@ async function refresh() {
   const active = document.activeElement;
   const hasDatePicker = document.querySelector('[id^="datepicker-"]');
   const hasPricePicker = document.querySelector('[id^="pricepicker-"]');
-  const isEditing = hasDatePicker || hasPricePicker || (active && (active.classList.contains('target-input') || active.tagName === 'TEXTAREA'));
+  const hasCollPicker = document.getElementById('coll-popover');
+  const isEditing = hasDatePicker || hasPricePicker || hasCollPicker
+    || (active && (active.classList.contains('target-input') || active.classList.contains('label-input') || active.tagName === 'TEXTAREA'));
 
   try {
     const [txData, statusData] = await Promise.all([
@@ -580,7 +600,7 @@ function renderTable(txs, height) {
       return `<tr>
         <td class="mono txid-copy" title="${t('copyTxid')}" onclick="copyTx('${tx.txid_full}','confirmed')">${tx.txid}</td>
         <td class="cell-tags">${formatTags(tx.tx_tags)}</td>
-        <td title="${escapeHTML(tx.wallet_label)}">${escapeHTML(shortWallet(tx.wallet_label))}</td>
+        <td title="${escapeHTML(tx.wallet_label)}">${escapeHTML(shortWallet(tx.wallet_label))}${collChip(tx, false)}</td>
         <td class="mono cell-amount">${formatBTC(tx.amount_sats)}</td>
         <td>${tx.fee_rate > 0 ? tx.fee_rate + ' sat/vB' : '--'}</td>
         <td class="mono cell-amount">${tx.fee_sats > 0 ? formatBTC(tx.fee_sats) : '--'}</td>
@@ -632,25 +652,21 @@ function renderActiveRow(tx, height) {
         expiryTag = `<span class="target-rem">(${Math.round(remainingMin/1440)}d)</span>`;
       }
     }
-    const editBtn = expired ? '' : `<span class="target-edit" onclick="unschedule('${tx.txid_full}')" title="${lang==='es'?'Modificar':'Edit'}">&#9998;</span>`;
     targetCell = `<div class="target-cell">
       <span class="mono">${dir} $${Math.round(tx.target_price).toLocaleString()}</span>
       ${expiryTag}
-      ${editBtn}
     </div>`;
   } else if (isMtpScheduled) {
-    // MTP scheduled: show date + pencil to edit
+    // MTP scheduled: show date (edit via pencil in Actions)
     targetCell = `<div class="target-cell">
       <span style="font-size:12px">MTP: ${tx.locktime.date}</span>
-      <span class="target-edit" onclick="unschedule('${tx.txid_full}')" title="${lang==='es'?'Modificar':'Edit'}">&#9998;</span>
     </div>`;
   } else if (isBlockScheduled) {
-    // Block scheduled: show block + remaining + pencil to edit
+    // Block scheduled: show block + remaining (edit via pencil in Actions)
     const remTag = blocksRem ? `<span class="target-rem">(${blocksRem} ${t('bl')})</span>` : '';
     targetCell = `<div class="target-cell">
       <span class="mono">${Number(val).toLocaleString()}</span>
       ${remTag}
-      <span class="target-edit" onclick="unschedule('${tx.txid_full}')" title="${lang==='es'?'Modificar':'Edit'}">&#9998;</span>
     </div>`;
   } else if (isPending || editable) {
     // Pending: input + OK + calendar + $ (if price enabled)
@@ -673,9 +689,9 @@ function renderActiveRow(tx, height) {
   const isBroadcast = tx.status === 'broadcasting' || tx.status === 'confirmed';
 
   return `<tr>
-    <td class="mono txid-copy" title="${isBroadcast ? t('copyTxid') : t('copyHex')}" onclick="copyTx('${tx.txid_full}','${tx.status}')">${tx._depth > 0 ? depPrefix(tx) + tx.txid_full.slice(0, 16 - tx._depth * 2) + '...' : tx.txid}</td>
-    <td class="cell-tags">${formatTags(tx.tx_tags)}</td>
-    <td title="${escapeHTML(tx.wallet_label)}">${escapeHTML(shortWallet(tx.wallet_label))}</td>
+    <td class="mono txid-copy" title="${isBroadcast ? t('copyTxid') : t('copyHex')}" onclick="copyTx('${tx.txid_full}','${tx.status}')">${tx._depth > 0 ? depPrefix(tx) + tx.txid_full.slice(0, Math.max(4, 8 - tx._depth * 2)) + '...' : tx.txid}</td>
+    <td class="cell-coll">${collChip(tx, true)}</td>
+    <td class="cell-label cell-label-edit" onclick="editLabel(event,'${tx.txid_full}')" title="${escapeHTML(tx.wallet_label)} — ${lang==='es'?'clic para editar':'click to edit'}">${escapeHTML(tx.wallet_label) || '--'}</td>
     <td class="mono cell-amount">${formatBTC(tx.amount_sats)}</td>
     <td>${tx.fee_rate > 0 ? tx.fee_rate + ' sat/vB' : '--'}</td>
     <td>${coinAge}</td>
@@ -766,6 +782,9 @@ document.addEventListener('click', (e) => {
     const tip = document.getElementById('bp-tooltip');
     if (tip) tip.remove();
   }
+  if (!e.target.closest('.coll-popover') && !e.target.closest('.coll-chip')) {
+    closeCollPicker();
+  }
 });
 
 function escapeHTML(str) {
@@ -818,6 +837,230 @@ function formatTags(tags) {
   const short = tags.map(t => TAG_SHORT[t] || t).join(', ');
   const full = tags.map(t => (TAG_FULL[t] || {})[lang] || t).join('\n');
   return `<span title="${full}">${short}</span>`;
+}
+
+// --- Collections (grouping field, exported on the BIP-329 "tx" lines) ---
+
+// Deterministic tone per collection name, anchored to BP's blue (--blue, hue 231).
+// High-contrast palette: spreads hue across the blue family and pushes
+// saturation/lightness apart so adjacent collections are easy to tell apart.
+const COLL_TONES = [
+  { h: 231, s: 90, l: 66 },  // vivid BP blue
+  { h: 205, s: 85, l: 55 },  // cyan-blue
+  { h: 250, s: 70, l: 72 },  // violet-blue
+  { h: 222, s: 45, l: 42 },  // dark slate blue
+  { h: 195, s: 75, l: 70 },  // pale sky
+  { h: 238, s: 95, l: 78 },  // light periwinkle
+];
+
+function collColor(name) {
+  let hash = 0;
+  for (let i = 0; i < name.length; i++) hash = (hash * 31 + name.charCodeAt(i)) >>> 0;
+  const t = COLL_TONES[hash % COLL_TONES.length];
+  return {
+    fg: `hsl(${t.h}, ${t.s}%, ${Math.min(t.l + 12, 86)}%)`,
+    border: `hsl(${t.h}, ${t.s}%, ${t.l}%)`,
+    bg: `hsla(${t.h}, ${t.s}%, ${t.l}%, 0.18)`,
+  };
+}
+
+function collStyle(name) {
+  const c = collColor(name);
+  return `color:${c.fg};border-color:${c.border};background:${c.bg}`;
+}
+
+function collChip(tx, editable) {
+  const c = tx.collection || '';
+  const edit = editable ? ` onclick="showCollPicker(event,'${tx.txid_full}')"` : '';
+  if (c) {
+    const title = editable
+      ? (lang === 'es' ? 'Colección — clic para cambiar' : 'Collection — click to change')
+      : (lang === 'es' ? 'Colección' : 'Collection');
+    return `<div class="coll-chip${editable ? ' coll-editable' : ''}"${edit} title="${title}" style="${collStyle(c)}">${escapeHTML(c)}</div>`;
+  }
+  if (!editable) return '';
+  return `<div class="coll-chip coll-empty"${edit} title="${lang === 'es' ? 'Asignar colección' : 'Assign collection'}">+</div>`;
+}
+
+function closeCollPicker() {
+  const p = document.getElementById('coll-popover');
+  if (p) p.remove();
+}
+
+function showCollPicker(ev, txid) {
+  ev.stopPropagation();
+  const wasOpen = !!document.getElementById('coll-popover');
+  closeCollPicker();
+  if (wasOpen) return; // clicking the same chip again toggles it closed
+  const tx = ((currentData && currentData.txs) || []).find(t => t.txid_full === txid);
+  const current = (tx && tx.collection) || '';
+  const known = (currentData && currentData.collections) || [];
+
+  const pop = document.createElement('div');
+  pop.id = 'coll-popover';
+  pop.className = 'coll-popover';
+  pop.onclick = e => e.stopPropagation();
+
+  if (known.length) {
+    const list = document.createElement('div');
+    list.className = 'coll-pop-list';
+    known.forEach(name => {
+      const pill = document.createElement('span');
+      pill.className = 'coll-pill' + (name === current ? ' is-current' : '');
+      const col = collColor(name);
+      pill.style.color = col.fg;
+      pill.style.borderColor = col.border;
+      pill.style.background = col.bg;
+      pill.title = name === current
+        ? (lang === 'es' ? 'Asignada' : 'Assigned')
+        : (lang === 'es' ? 'Asignar' : 'Assign');
+      pill.onclick = () => setCollection(txid, name);
+
+      const label = document.createElement('span');
+      label.className = 'coll-pill-name';
+      label.textContent = name;
+      pill.appendChild(label);
+
+      const del = document.createElement('span');
+      del.className = 'coll-pill-x';
+      del.textContent = '×';
+      del.title = lang === 'es' ? 'Eliminar colección' : 'Delete collection';
+      del.onclick = (e) => {
+        e.stopPropagation();
+        const msg = lang === 'es'
+          ? `¿Eliminar la colección «${name}»?\nSe quitará de todas las transacciones que la usen.`
+          : `Delete collection "${name}"?\nIt will be removed from every transaction using it.`;
+        if (confirm(msg)) deleteCollection(name);
+      };
+      pill.appendChild(del);
+      list.appendChild(pill);
+    });
+    pop.appendChild(list);
+  }
+
+  const row = document.createElement('div');
+  row.className = 'coll-pop-row';
+
+  const input = document.createElement('input');
+  input.className = 'inline-edit coll-pop-input';
+  input.maxLength = 80;
+  input.placeholder = lang === 'es' ? 'Nueva colección…' : 'New collection…';
+  input.onkeydown = e => {
+    if (e.key === 'Enter' && input.value.trim()) setCollection(txid, input.value.trim());
+    if (e.key === 'Escape') closeCollPicker();
+  };
+  row.appendChild(input);
+
+  if (current) {
+    const clear = document.createElement('div');
+    clear.className = 'coll-pop-clear';
+    clear.textContent = '× ' + (lang === 'es' ? 'Quitar colección' : 'Clear collection');
+    clear.title = lang === 'es' ? 'Desasignar de esta transacción' : 'Unassign from this transaction';
+    clear.onclick = () => setCollection(txid, '');
+    row.appendChild(clear);
+  }
+  pop.appendChild(row);
+
+  document.body.appendChild(pop);
+  const r = ev.target.getBoundingClientRect();
+  pop.style.left = Math.max(8, Math.min(r.left, window.innerWidth - pop.offsetWidth - 12)) + 'px';
+  pop.style.top = (r.bottom + 6 + window.scrollY) + 'px';
+  setTimeout(() => input.focus(), 30);
+}
+
+async function deleteCollection(name) {
+  closeCollPicker();
+  try {
+    const resp = await fetch('/api/collections/delete', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name }),
+    });
+    if (!resp.ok) {
+      const data = await resp.json().catch(() => ({}));
+      alert(data.error || ('HTTP ' + resp.status));
+      return;
+    }
+    refresh();
+  } catch (e) {
+    alert(String(e));
+  }
+}
+
+async function setCollection(txid, value) {
+  closeCollPicker();
+  try {
+    const resp = await fetch(`/api/txs/${txid}/collection`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ collection: value }),
+    });
+    if (!resp.ok) {
+      const data = await resp.json().catch(() => ({}));
+      alert(data.error || ('HTTP ' + resp.status));
+      return;
+    }
+    refresh();
+  } catch (e) {
+    alert(String(e));
+  }
+}
+
+// --- Label inline editing ---
+
+function editLabel(ev, txid) {
+  ev.stopPropagation();
+  const td = ev.currentTarget;
+  if (td.querySelector('input')) return; // already editing
+  const tx = ((currentData && currentData.txs) || []).find(t => t.txid_full === txid);
+  const current = (tx && tx.wallet_label) || '';
+
+  const input = document.createElement('input');
+  input.className = 'inline-edit label-input';
+  input.maxLength = 120;
+  input.value = current;
+  let done = false;
+  const finish = (save) => {
+    if (done) return;
+    done = true;
+    input.onblur = null;
+    input.blur(); // release focus so refresh() re-renders the table
+    if (save && input.value.trim() !== current) {
+      saveLabel(txid, input.value.trim());
+    } else {
+      refresh();
+    }
+  };
+  input.onkeydown = e => {
+    if (e.key === 'Enter') finish(true);
+    if (e.key === 'Escape') finish(false);
+  };
+  input.onblur = () => finish(true);
+  td.textContent = '';
+  td.appendChild(input);
+  input.focus();
+  // Select all anchored backwards so the view stays at the START of the text
+  // (plain select() scrolls long values to their tail, which reads as if the
+  // value were a different text).
+  input.setSelectionRange(0, input.value.length, 'backward');
+  input.scrollLeft = 0;
+}
+
+async function saveLabel(txid, label) {
+  try {
+    const resp = await fetch(`/api/txs/${txid}/label`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ label }),
+    });
+    if (!resp.ok) {
+      const data = await resp.json().catch(() => ({}));
+      alert(data.error || ('HTTP ' + resp.status));
+    }
+  } catch (e) {
+    alert(String(e));
+  }
+  refresh();
 }
 
 let rotatingIndex = 0;
@@ -985,6 +1228,8 @@ function isExpiredByDate(tx) {
 function buildActions(tx) {
   const btns = [];
   if ((tx.status === 'pending' || tx.status === 'scheduled') && !isExpiredByDate(tx)) {
+    const editTitle = lang === 'es' ? 'Modificar programación' : 'Edit schedule';
+    btns.push(`<span class="action-icon edit" onclick="editSchedule('${tx.txid_full}')" title="${editTitle}"><svg class="pencil-icon" viewBox="0 0 24 24"><path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04a1 1 0 0 0 0-1.41l-2.34-2.34a1 1 0 0 0-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/></svg></span>`);
     btns.push(`<span class="action-icon send" onclick="broadcastNow('${tx.txid_full}')" title="${t('emit')}"><svg class="plane-icon" viewBox="0 0 24 24"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/></svg></span>`);
     btns.push(`<span class="action-icon delete" onclick="deleteTx('${tx.txid_full}')" title="${t('delete')}"><svg class="x-icon" viewBox="0 0 24 24"><path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg></span>`);
   } else if (isExpiredByDate(tx) && tx.status === 'scheduled') {
@@ -999,6 +1244,19 @@ function buildActions(tx) {
 }
 
 // --- Actions ---
+
+function editSchedule(txid) {
+  const tx = currentData && currentData.txs.find(t => t.txid_full === txid);
+  if (!tx) return;
+  if (tx.status === 'scheduled') {
+    // Revert to pending so the target becomes editable again
+    unschedule(txid);
+    return;
+  }
+  // Pending: focus the inline block input
+  const input = document.getElementById('blk-' + txid);
+  if (input) input.focus();
+}
 
 async function schedule(txid) {
   const input = document.getElementById('blk-' + txid);
@@ -1325,6 +1583,12 @@ function applyHistoryState() {
 applyLang();
 applyHistoryState();
 refresh();
+// Firefox doesn't support -webkit-text-security: fall back to type=password
+// (its password manager is also far less aggressive about offering to save).
+if (!(window.CSS && CSS.supports && CSS.supports('-webkit-text-security', 'disc'))) {
+  document.querySelectorAll('.masked-input').forEach(i => { i.type = 'password'; });
+}
+
 setInterval(refresh, 5000);
 
 // --- History sorting ---
@@ -2208,6 +2472,33 @@ function openExportModal() {
   document.getElementById('export-none-ack').checked = false;
   document.querySelector('input[name="export-method"][value="passphrase"]').checked = true;
   updateExportMethod();
+  // Scope: full pool vs selected collections
+  document.querySelector('input[name="export-scope"][value="all"]').checked = true;
+  const known = (currentData && currentData.collections) || [];
+  const collRow = document.getElementById('export-scope-coll-row');
+  collRow.style.display = known.length ? '' : 'none';
+  const list = document.getElementById('export-collections-list');
+  list.innerHTML = '';
+  known.forEach(name => {
+    const label = document.createElement('label');
+    label.className = 'coll-pill';
+    const col = collColor(name);
+    label.style.color = col.fg;
+    label.style.borderColor = col.border;
+    label.style.background = col.bg;
+    const cb = document.createElement('input');
+    cb.type = 'checkbox';
+    cb.value = name;
+    cb.className = 'export-coll-cb';
+    cb.style.accentColor = col.border;
+    const txt = document.createElement('span');
+    txt.className = 'coll-pill-name';
+    txt.textContent = name;
+    label.appendChild(cb);
+    label.appendChild(txt);
+    list.appendChild(label);
+  });
+  updateExportScope();
   applyExportImportI18n();
   // Populate the npub display for NIP-44 method
   const npub = currentStatus && currentStatus.npub || (document.getElementById('set-npub') ? document.getElementById('set-npub').value : '');
@@ -2247,6 +2538,8 @@ function applyExportImportI18n() {
   const setText = (id, key) => { const el = document.getElementById(id); if (el) el.textContent = t(key); };
   setText('export-modal-title', 'exportModalTitle');
   setText('export-modal-help', 'exportModalHelp');
+  setText('export-scope-all', 'exportScopeAll');
+  setText('export-scope-coll', 'exportScopeColl');
   setText('export-method-passphrase', 'exportMethodPassphrase');
   setText('export-method-nip44', 'exportMethodNip44');
   setText('export-method-none', 'exportMethodNone');
@@ -2268,6 +2561,12 @@ function applyExportImportI18n() {
   setText('import-conflicts-title', 'importConflictsTitle');
   setText('import-conflicts-note', 'importConflictsNote');
   document.getElementById('import-passphrase').placeholder = t('importPassphrasePlaceholder');
+}
+
+function updateExportScope() {
+  const scope = document.querySelector('input[name="export-scope"]:checked').value;
+  document.getElementById('export-collections-list').style.display =
+    scope === 'collections' ? 'flex' : 'none';
 }
 
 function updateExportMethod() {
@@ -2294,6 +2593,15 @@ async function doExport() {
   submitBtn.textContent = t('exportInProgress');
 
   let body = { method };
+  const scope = document.querySelector('input[name="export-scope"]:checked').value;
+  if (scope === 'collections') {
+    const selected = [...document.querySelectorAll('.export-coll-cb:checked')].map(cb => cb.value);
+    if (!selected.length) {
+      _showExportError(t('exportNoCollSelected'));
+      submitBtn.disabled = false; submitBtn.textContent = originalText; return;
+    }
+    body.collections = selected;
+  }
   if (method === 'passphrase') {
     const p1 = document.getElementById('export-passphrase').value;
     const p2 = document.getElementById('export-passphrase-confirm').value;
@@ -2352,8 +2660,30 @@ async function onImportFileChosen(input) {
   if (!file) return;
   try {
     const text = await file.text();
-    const parsed = JSON.parse(text);
-    if (parsed.version !== 1 || !parsed.encryption || !parsed.ciphertext) {
+    let parsed = null;
+    try { parsed = JSON.parse(text); } catch (_) { /* not a single JSON doc → maybe JSONL (v2) */ }
+
+    if (!parsed) {
+      // v2 unencrypted: BIP-329 dialect JSONL — every line must be a JSON object
+      const lines = text.split('\n').filter(l => l.trim());
+      if (!lines.length) throw new Error('empty file');
+      lines.forEach(l => JSON.parse(l));
+      _importParsedFile = { jsonl: text };
+      document.getElementById('import-passphrase-row').style.display = 'none';
+      document.getElementById('import-nip44-row').style.display = 'none';
+      document.getElementById('import-plan-submit').disabled = false;
+      return;
+    }
+
+    if (parsed.type === 'bp' || parsed.type === 'tx') {
+      // single-line JSONL edge case (e.g. empty-pool export)
+      _importParsedFile = { jsonl: text };
+      document.getElementById('import-passphrase-row').style.display = 'none';
+      document.getElementById('import-nip44-row').style.display = 'none';
+      document.getElementById('import-plan-submit').disabled = false;
+      return;
+    }
+    if (![1, 2].includes(parsed.version) || !parsed.encryption || !parsed.ciphertext) {
       throw new Error('not a valid BP export file');
     }
     _importParsedFile = parsed;
@@ -2390,10 +2720,15 @@ async function doImportPlan() {
 
   try {
     let body;
-    if (_importParsedFile.encryption === 'nip44') {
+    if (_importParsedFile.jsonl) {
+      // v2 unencrypted JSONL — server parses the dialect
+      body = { file: _importParsedFile.jsonl };
+    } else if (_importParsedFile.encryption === 'nip44') {
       const ephem = (_importParsedFile.encryption_meta || {}).ephem_pubkey;
       const plaintext = await window.nostr.nip44.decrypt(ephem, _importParsedFile.ciphertext);
-      _importDecryptedPayload = JSON.parse(plaintext);
+      // v1 plaintext is a JSON object; v2 is JSONL text — server accepts both shapes
+      try { _importDecryptedPayload = JSON.parse(plaintext); }
+      catch (_) { _importDecryptedPayload = plaintext; }
       body = { decrypted_payload: _importDecryptedPayload };
     } else {
       const pass = document.getElementById('import-passphrase').value;
@@ -2616,9 +2951,15 @@ function howtoHtmlES(connectAddr) {
       <p class="settings-help">Los datos se guardan localmente en la base de datos de BP, no en relays Nostr. El descifrado ocurre en el browser vía extensión NIP-07 (Alby, nos2x): BP nunca ve tu clave privada. Usa un npub dedicado — no tu identidad Nostr principal — para no vincular tu actividad de txs a tu nym.</p>
     </div>
     <div class="settings-subsection">
+      <strong class="settings-subsection-title">Labels y colecciones</strong>
+      <p class="settings-help">Cada tx retenida tiene dos campos de organización. El <strong>label</strong> es su nombre individual ("préstamo 1", "herederos rama A"): BP lo toma de la wallet al interceptar la tx si viene, y puedes editarlo en cualquier momento haciendo clic sobre el texto en la columna Label.</p>
+      <p class="settings-help">La <strong>colección</strong> agrupa txs por tipo o propósito — lending, herencia, migración… Es independiente del label: dos txs de la colección <em>lending</em> pueden llamarse "préstamo 1" y "préstamo 2". Haz clic en el chip (o en el <code class="kbd-mono">+</code>) de la columna Colección para asignar una existente, crear una nueva escribiéndola, o desasignarla. Las colecciones creadas quedan guardadas para reutilizarlas; la <code class="kbd-mono">×</code> de cada una en el selector la elimina globalmente (previa confirmación). Cada colección recibe un tono de azul propio y estable para reconocerla de un vistazo.</p>
+      <p class="settings-help">Ambos campos viajan en el export del pool: el label como <code class="kbd-mono">label</code> estándar BIP-329 y la colección como campo <code class="kbd-mono">collection</code> del dialecto de BP, así que sobreviven a un restore completo.</p>
+    </div>
+    <div class="settings-subsection">
       <strong class="settings-subsection-title">Export / Import del pool</strong>
       <p class="settings-help">Las txs pendientes y programadas viven en la base de datos local de BP. Si pierdes esa DB (reinstalación, migración de nodo), las txs sin broadcastear se pierden — los UTXOs quedan congelados hasta que alguien las retransmita o expire el locktime.</p>
-      <p class="settings-help">Exporta el pool regularmente como backup. El archivo <code class="kbd-mono">.bp</code> puede cifrarse con passphrase o con tu npub (NIP-44). Al importar, BP detecta duplicados y conflictos de UTXO y los omite sin sobreescribir el estado existente.</p>
+      <p class="settings-help">Exporta el pool regularmente como backup. Cifrado (passphrase o tu npub NIP-44) genera un archivo <code class="kbd-mono">.bp</code>; sin cifrar genera un <code class="kbd-mono">.jsonl</code> en dialecto <a href="https://bips.dev/329/" target="_blank" rel="noopener">BIP-329</a> (legible incluso sin BP, e importable en wallets como Sparrow para congelar los UTXOs comprometidos). Al importar, BP detecta duplicados y conflictos de UTXO y los omite sin sobreescribir el estado existente.</p>
     </div>
   </div>
   `;
@@ -2731,9 +3072,15 @@ function howtoHtmlEN(connectAddr) {
       <p class="settings-help">Data is stored in BP's local database, not on Nostr relays. Decryption happens in the browser via NIP-07 extension (Alby, nos2x): BP never sees your private key. Use a dedicated npub — not your main Nostr identity — to avoid linking tx activity to your nym.</p>
     </div>
     <div class="settings-subsection">
+      <strong class="settings-subsection-title">Labels and collections</strong>
+      <p class="settings-help">Each retained tx has two organization fields. The <strong>label</strong> is its individual name ("loan 1", "heirs branch A"): BP takes it from the wallet when intercepting the tx if provided, and you can edit it anytime by clicking the text in the Label column.</p>
+      <p class="settings-help">The <strong>collection</strong> groups txs by type or purpose — lending, inheritance, migration… It is independent from the label: two txs in the <em>lending</em> collection can be named "loan 1" and "loan 2". Click the chip (or the <code class="kbd-mono">+</code>) in the Collection column to assign an existing one, create a new one by typing it, or unassign it. Created collections are remembered for reuse; the <code class="kbd-mono">×</code> on each one in the picker deletes it globally (after confirmation). Every collection gets its own stable shade of blue so you can recognize it at a glance.</p>
+      <p class="settings-help">Both fields travel in the pool export: the label as the standard BIP-329 <code class="kbd-mono">label</code> and the collection as BP's dialect <code class="kbd-mono">collection</code> field, so they survive a full restore.</p>
+    </div>
+    <div class="settings-subsection">
       <strong class="settings-subsection-title">Pool export / import</strong>
       <p class="settings-help">Pending and scheduled txs live in BP's local database. If that DB is lost (reinstall, node migration), unbroadcast txs are gone — UTXOs stay frozen until someone relays them or the locktime expires.</p>
-      <p class="settings-help">Export the pool regularly as a backup. The <code class="kbd-mono">.bp</code> file can be encrypted with a passphrase or your npub (NIP-44). On import, BP detects duplicates and UTXO conflicts and skips them without overwriting existing state.</p>
+      <p class="settings-help">Export the pool regularly as a backup. Encrypted (passphrase or your NIP-44 npub) produces a <code class="kbd-mono">.bp</code> file; unencrypted produces a <code class="kbd-mono">.jsonl</code> in <a href="https://bips.dev/329/" target="_blank" rel="noopener">BIP-329</a> dialect (readable even without BP, and importable into wallets like Sparrow to freeze the committed UTXOs). On import, BP detects duplicates and UTXO conflicts and skips them without overwriting existing state.</p>
     </div>
   </div>
   `;
