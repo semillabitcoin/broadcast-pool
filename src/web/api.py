@@ -5,6 +5,7 @@ import hashlib
 import json
 import logging
 import os
+import re
 from datetime import datetime
 
 from aiohttp import web
@@ -76,6 +77,10 @@ def create_app(store: TxStore, proxy_server=None, scheduler=None) -> web.Applica
     app.router.add_post("/api/txs/{txid}/schedule-mtp", handle_schedule_mtp)
     app.router.add_post("/api/txs/{txid}/auto-schedule-locktime", handle_auto_schedule_locktime)
     app.router.add_post("/api/txs/{txid}/unschedule", handle_unschedule)
+    app.router.add_post("/api/txs/{txid}/collection", handle_set_collection)
+    app.router.add_post("/api/txs/{txid}/label", handle_set_label)
+    app.router.add_post("/api/collections/delete", handle_delete_collection)
+    app.router.add_get("/api/diagnostics", handle_diagnostics)
     app.router.add_post("/api/txs/{txid}/retry", handle_retry)
     app.router.add_post("/api/txs/import", handle_import_tx)
     app.router.add_get("/api/status", handle_status)
@@ -223,7 +228,7 @@ def _tx_to_dict(tx, current_height: int = 0, store: TxStore = None, current_mtp:
             }
 
     return {
-        "txid": tx.txid[:16] + "...",
+        "txid": tx.txid[:8] + "...",
         "txid_full": tx.txid,
         "tx_tags": tx_tags,
         "input_count": tx.input_count,
@@ -237,6 +242,7 @@ def _tx_to_dict(tx, current_height: int = 0, store: TxStore = None, current_mtp:
         "fee_warning": tx.fee_rate > 1000 or (tx.amount_sats > 0 and tx.fee_sats > tx.amount_sats * 0.5),
         "vsize": tx.vsize,
         "wallet_label": tx.wallet_label,
+        "collection": tx.collection,
         "status": tx.status,
         "target_block": tx.target_block,
         "target_price": tx.target_price,
@@ -261,6 +267,7 @@ async def handle_list_txs(request: web.Request) -> web.Response:
 
     data = {
         "txs": [_tx_to_dict(tx, current_height, store, current_mtp) for tx in txs],
+        "collections": store.get_known_collections(),
         "current_height": current_height,
         "total_pending": sum(1 for t in txs if t.status == "pending"),
         "total_scheduled": sum(1 for t in txs if t.status == "scheduled"),
@@ -387,6 +394,62 @@ async def handle_auto_schedule_locktime(request: web.Request) -> web.Response:
             {"error": result.get("reason", "cannot auto-schedule")}, status=400
         )
     return web.json_response({"ok": True, **result})
+
+
+async def handle_set_collection(request: web.Request) -> web.Response:
+    """Assign (or clear with "") the collection of a retained tx."""
+    store: TxStore = request.app["store"]
+    txid = request.match_info["txid"]
+    tx = store.get_tx(txid)
+    if not tx:
+        return web.json_response({"error": "Not found"}, status=404)
+    try:
+        body = await request.json()
+    except Exception:
+        return web.json_response({"error": "Invalid JSON"}, status=400)
+    collection = body.get("collection", "")
+    if not isinstance(collection, str):
+        return web.json_response({"error": "collection must be a string"}, status=400)
+    collection = collection.strip()
+    if len(collection) > 80:
+        return web.json_response({"error": "collection too long (max 80 chars)"}, status=400)
+    store.set_collection(txid, collection)
+    return web.json_response({"ok": True, "collection": collection})
+
+
+async def handle_delete_collection(request: web.Request) -> web.Response:
+    """Delete a collection: unassign it from every tx and forget the name."""
+    store: TxStore = request.app["store"]
+    try:
+        body = await request.json()
+    except Exception:
+        return web.json_response({"error": "Invalid JSON"}, status=400)
+    name = body.get("name", "")
+    if not isinstance(name, str) or not name.strip():
+        return web.json_response({"error": "name required"}, status=400)
+    unassigned = store.delete_collection(name.strip())
+    return web.json_response({"ok": True, "unassigned": unassigned})
+
+
+async def handle_set_label(request: web.Request) -> web.Response:
+    """Edit the wallet label of a retained tx."""
+    store: TxStore = request.app["store"]
+    txid = request.match_info["txid"]
+    tx = store.get_tx(txid)
+    if not tx:
+        return web.json_response({"error": "Not found"}, status=404)
+    try:
+        body = await request.json()
+    except Exception:
+        return web.json_response({"error": "Invalid JSON"}, status=400)
+    label = body.get("label", "")
+    if not isinstance(label, str):
+        return web.json_response({"error": "label must be a string"}, status=400)
+    label = label.strip()
+    if len(label) > 120:
+        return web.json_response({"error": "label too long (max 120 chars)"}, status=400)
+    store.set_wallet_label(txid, label)
+    return web.json_response({"ok": True, "label": label})
 
 
 async def handle_unschedule(request: web.Request) -> web.Response:
@@ -664,6 +727,44 @@ async def handle_reorder(request: web.Request) -> web.Response:
 
     store.reorder(txid, direction)
     return web.json_response({"ok": True})
+
+
+async def handle_diagnostics(request: web.Request) -> web.Response:
+    """Downloadable privacy-preserving diagnostics report (plain text).
+
+    Safe to share publicly: txids, scripthashes, addresses, hex, xpubs,
+    nostr keys, IPs and onions are redacted at capture time.
+    """
+    from src import diagnostics
+
+    store: TxStore = request.app["store"]
+    proxy = request.app.get("proxy_server")
+    host, port, use_ssl = store.get_upstream()
+
+    txs = store.get_all_txs()
+    by_status: dict[str, int] = {}
+    for tx in txs:
+        by_status[tx.status] = by_status.get(tx.status, 0) + 1
+
+    extra = {
+        "network": store.get_detected_network() or store.network,
+        "current_height": store.get_current_height(),
+        "wallet_connections": proxy.connection_count if proxy else 0,
+        "upstream_ssl": use_ssl,
+        "upstream_port": port,  # port reveals server type (50001/50002/...), not identity
+        "encryption_at_rest": bool(config.APP_SEED),
+        "tx_counts_by_status": by_status or "(empty pool)",
+    }
+
+    report = diagnostics.build_report(extra)
+    today = datetime.utcnow().strftime("%Y-%m-%d")
+    return web.Response(
+        body=report.encode("utf-8"),
+        headers={
+            "Content-Type": "text/plain; charset=utf-8",
+            "Content-Disposition": f'attachment; filename="bp-diagnostics-{today}.txt"',
+        },
+    )
 
 
 async def handle_status(request: web.Request) -> web.Response:
@@ -1164,8 +1265,11 @@ async def handle_widget_stats(request: web.Request) -> web.Response:
 async def handle_pool_export(request: web.Request) -> web.Response:
     """Export active retained txs (pending + scheduled) as an encrypted .bp file.
 
-    Body: { method: "passphrase" | "nip44", passphrase?: "...", npub?: "..." }
-    Returns: application/octet-stream with the .bp file content.
+    Body: { method: "passphrase" | "nip44" | "none", passphrase?, npub?,
+            collections?: ["lending", ...] }  — when present and non-empty,
+            only txs belonging to those collections are exported (e.g. to hand
+            a single collection to another BP node).
+    Returns: application/octet-stream with the .bp/.jsonl file content.
     """
     from src.pool import export as pool_export
 
@@ -1181,10 +1285,26 @@ async def handle_pool_export(request: web.Request) -> web.Response:
             {"error": "method must be 'passphrase', 'nip44' or 'none'"}, status=400
         )
 
+    collections = body.get("collections")
+    if collections is not None and (
+        not isinstance(collections, list)
+        or not all(isinstance(c, str) and c.strip() for c in collections)
+    ):
+        return web.json_response(
+            {"error": "collections must be a list of non-empty strings"}, status=400
+        )
+
     txs = [
         *store.get_all_txs(status="pending"),
         *store.get_all_txs(status="scheduled"),
     ]
+    if collections:
+        wanted = {c.strip() for c in collections}
+        txs = [tx for tx in txs if tx.collection in wanted]
+        if not txs:
+            return web.json_response(
+                {"error": "no active txs in the selected collections"}, status=400
+            )
     txs_data: list[dict] = []
     for tx in txs:
         raw = store.get_raw_hex(tx.txid)
@@ -1200,20 +1320,33 @@ async def handle_pool_export(request: web.Request) -> web.Response:
         txs_data.append({
             "txid": tx.txid,
             "raw_hex": raw,
-            "raw_hex_checksum": hashlib.sha256(raw.encode("ascii")).hexdigest(),
             "target_block": tx.target_block,
             "target_price": tx.target_price,
             "price_direction": tx.price_direction,
             "expires_at": tx.expires_at,
             "depends_on": tx.depends_on,
             "wallet_label": tx.wallet_label,
+            "collection": tx.collection,
             "locktime": tx.locktime,
             "created_at": tx.created_at,
             "inputs": inputs,
         })
 
-    payload = pool_export.build_payload(txs_data, store.network)
+    # v2: the cleartext document is BIP-329 dialect JSONL (see pool/export.py)
+    jsonl_text = pool_export.build_jsonl(txs_data, store.network)
 
+    # Filename scope suffix: full pool vs selected collections
+    if collections:
+        wanted_sorted = sorted({c.strip() for c in collections})
+        if len(wanted_sorted) == 1:
+            slug = re.sub(r"[^a-z0-9]+", "-", wanted_sorted[0].lower()).strip("-") or "coleccion"
+            scope = f"-{slug}"
+        else:
+            scope = f"-{len(wanted_sorted)}colecciones"
+    else:
+        scope = ""
+
+    today = datetime.utcnow().strftime("%Y-%m-%d")
     try:
         if method == "passphrase":
             passphrase = body.get("passphrase", "")
@@ -1223,7 +1356,7 @@ async def handle_pool_export(request: web.Request) -> web.Response:
                               "(use method='none' for unencrypted export)"},
                     status=400,
                 )
-            enc_block = pool_export.encrypt_passphrase(payload, passphrase)
+            enc_block = pool_export.encrypt_passphrase(jsonl_text, passphrase)
         elif method == "nip44":
             npub = (body.get("npub") or store.get_state("npub") or "").strip()
             if not npub:
@@ -1231,10 +1364,18 @@ async def handle_pool_export(request: web.Request) -> web.Response:
                     {"error": "npub required for NIP-44 export (set one in Settings)"},
                     status=400,
                 )
-            enc_block = pool_export.encrypt_nip44(payload, npub)
-        else:  # method == "none"
+            enc_block = pool_export.encrypt_nip44(jsonl_text, npub)
+        else:  # method == "none" — the file IS the BIP-329 dialect JSONL, no wrapper
             log.warning("Pool exported UNENCRYPTED — %d txs", len(txs_data))
-            enc_block = pool_export.build_unencrypted(payload)
+            filename = f"broadcast-pool-export{scope}-{store.network}-{today}.jsonl"
+            return web.Response(
+                body=jsonl_text.encode("utf-8"),
+                headers={
+                    "Content-Type": "application/octet-stream",
+                    "Content-Disposition": f'attachment; filename="{filename}"',
+                    "X-Tx-Count": str(len(txs_data)),
+                },
+            )
     except ValueError as e:
         return web.json_response({"error": str(e)}, status=400)
     except Exception as e:
@@ -1243,8 +1384,7 @@ async def handle_pool_export(request: web.Request) -> web.Response:
 
     file_obj = pool_export.wrap_file(store.network, enc_block)
     body_bytes = json.dumps(file_obj, ensure_ascii=False, indent=2).encode("utf-8")
-    today = datetime.utcnow().strftime("%Y-%m-%d")
-    filename = f"broadcast-pool-export-{store.network}-{today}.bp"
+    filename = f"broadcast-pool-export{scope}-{store.network}-{today}.bp"
     return web.Response(
         body=body_bytes,
         headers={
@@ -1259,7 +1399,7 @@ def _validate_import_payload(payload: dict, store: TxStore) -> tuple[list[dict],
     """Validate the cleartext payload. Returns (txs_list, error)."""
     if not isinstance(payload, dict):
         return [], "payload must be a JSON object"
-    if payload.get("version") != 1:
+    if payload.get("version") not in (1, 2):
         return [], f"unsupported export version: {payload.get('version')}"
     if payload.get("network") and payload["network"] != store.network:
         return [], (
@@ -1276,15 +1416,28 @@ async def _decrypt_request(body: dict) -> tuple[dict | None, web.Response | None
     """Resolve the body into a cleartext payload dict.
 
     Body shapes:
-    - { decrypted_payload: {...} }                       — used by NIP-44 (browser decrypted)
+    - { decrypted_payload: {...} | "jsonl…" }            — used by NIP-44 (browser decrypted;
+                                                           v1 sends the dict, v2 the JSONL text)
     - { file: {...}, method: "passphrase", passphrase }  — server decrypts AES-GCM
+    - { file: "jsonl…" }                                 — unencrypted v2 (.jsonl) or pasted v1 JSON
     """
     from src.pool import export as pool_export
 
     if "decrypted_payload" in body:
-        return body["decrypted_payload"], None
+        decrypted = body["decrypted_payload"]
+        if isinstance(decrypted, str):
+            try:
+                return pool_export.parse_cleartext(decrypted), None
+            except ValueError as e:
+                return None, web.json_response({"error": str(e)}, status=400)
+        return decrypted, None
 
     file_obj = body.get("file")
+    if isinstance(file_obj, str):
+        try:
+            return pool_export.parse_cleartext(file_obj), None
+        except ValueError as e:
+            return None, web.json_response({"error": str(e)}, status=400)
     if not isinstance(file_obj, dict):
         return None, web.json_response(
             {"error": "Provide either 'decrypted_payload' or 'file'+'passphrase'"},
@@ -1388,6 +1541,7 @@ async def handle_pool_import_plan(request: web.Request) -> web.Response:
                 "target_block": entry.get("target_block"),
                 "target_price": entry.get("target_price"),
                 "wallet_label": entry.get("wallet_label", ""),
+                "collection": entry.get("collection") or "",
                 "amount_sats": sum(o.value_sats for o in parsed.outputs),
             })
 
@@ -1487,6 +1641,8 @@ async def handle_pool_import_apply(request: web.Request) -> web.Response:
                 entry["raw_hex"],
                 wallet_label=entry.get("wallet_label") or "Pool import",
             )
+            if entry.get("collection"):
+                store.set_collection(parsed.txid, str(entry["collection"]))
             # depends_on: only set if the parent is also being imported or already in pool
             dep = entry.get("depends_on")
             if dep and store.get_tx(dep):

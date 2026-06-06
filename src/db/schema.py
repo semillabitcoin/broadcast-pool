@@ -17,6 +17,7 @@ CREATE TABLE IF NOT EXISTS retained_txs (
     depends_on      TEXT,
     network         TEXT NOT NULL DEFAULT 'mainnet',
     wallet_label    TEXT NOT NULL DEFAULT '',
+    collection      TEXT NOT NULL DEFAULT '',
     status          TEXT NOT NULL DEFAULT 'pending',
     target_block    INTEGER,
     sort_order      INTEGER NOT NULL DEFAULT 0,
@@ -89,6 +90,7 @@ MIGRATIONS = [
     "ALTER TABLE retained_txs ADD COLUMN price_direction TEXT DEFAULT 'below'",
     "ALTER TABLE retained_txs ADD COLUMN expires_at TEXT",
     "ALTER TABLE retained_txs ADD COLUMN vaulted INTEGER NOT NULL DEFAULT 0",
+    "ALTER TABLE retained_txs ADD COLUMN collection TEXT NOT NULL DEFAULT ''",
     "ALTER TABLE retained_tx_inputs ADD COLUMN confirmed_height INTEGER",
     """CREATE TABLE IF NOT EXISTS vault_entries (
         id INTEGER PRIMARY KEY AUTOINCREMENT,

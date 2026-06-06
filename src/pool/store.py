@@ -22,6 +22,7 @@ class RetainedTx:
     depends_on: str | None
     network: str
     wallet_label: str
+    collection: str
     status: str
     target_block: int | None
     target_price: float | None
@@ -293,6 +294,74 @@ class TxStore:
                 (status, error, txid),
             )
             self._conn.commit()
+
+    def set_collection(self, txid: str, collection: str) -> None:
+        with self._lock:
+            self._conn.execute(
+                "UPDATE retained_txs SET collection=?, updated_at=datetime('now') WHERE txid=?",
+                (collection, txid),
+            )
+            self._conn.commit()
+        if collection:
+            self.remember_collection(collection)
+
+    def set_wallet_label(self, txid: str, label: str) -> None:
+        with self._lock:
+            self._conn.execute(
+                "UPDATE retained_txs SET wallet_label=?, updated_at=datetime('now') WHERE txid=?",
+                (label, txid),
+            )
+            self._conn.commit()
+
+    def get_known_collections(self) -> list[str]:
+        """All collections ever created: the persisted set plus any present in txs."""
+        import json
+        rows = self._conn.execute(
+            "SELECT DISTINCT collection FROM retained_txs WHERE collection != ''",
+        ).fetchall()
+        known = {r["collection"] for r in rows}
+        raw = self.get_state("known_collections")
+        if raw:
+            try:
+                known.update(json.loads(raw))
+            except ValueError:
+                pass
+        return sorted(known, key=str.casefold)
+
+    def delete_collection(self, name: str) -> int:
+        """Remove a collection everywhere: unassign from txs and forget the name.
+        Returns how many txs were unassigned."""
+        import json
+        with self._lock:
+            cur = self._conn.execute(
+                "UPDATE retained_txs SET collection='', updated_at=datetime('now') WHERE collection=?",
+                (name,),
+            )
+            self._conn.commit()
+        raw = self.get_state("known_collections")
+        if raw:
+            try:
+                known = set(json.loads(raw))
+            except ValueError:
+                known = set()
+            if name in known:
+                known.discard(name)
+                self.set_state("known_collections", json.dumps(sorted(known, key=str.casefold)))
+        return cur.rowcount
+
+    def remember_collection(self, name: str) -> None:
+        """Persist a collection name so it remains suggestable even with no txs using it."""
+        import json
+        known = set()
+        raw = self.get_state("known_collections")
+        if raw:
+            try:
+                known = set(json.loads(raw))
+            except ValueError:
+                pass
+        if name not in known:
+            known.add(name)
+            self.set_state("known_collections", json.dumps(sorted(known, key=str.casefold)))
 
     def set_depends_on(self, txid: str, parent_txid: str) -> None:
         with self._lock:

@@ -91,8 +91,9 @@ def encrypt_nip44(plaintext: str, conv_key: bytes) -> str:
     return b64encode(payload).decode()
 
 
-def encrypt_for_npub(data: dict, npub: str) -> dict:
-    """Encrypt a dict for the owner of an npub. Returns {ephem_pubkey, payload}."""
+def encrypt_for_npub(data: dict | str, npub: str) -> dict:
+    """Encrypt a dict (JSON-dumped) or a raw string for the owner of an npub.
+    Returns {ephem_pubkey, payload}."""
     recipient_hex = npub_to_hex(npub)
 
     eph_priv = PrivateKey()
@@ -100,7 +101,7 @@ def encrypt_for_npub(data: dict, npub: str) -> dict:
     eph_pub_hex = eph_priv.public_key.format(compressed=True)[1:].hex()
 
     conv_key = _get_conversation_key(eph_secret, recipient_hex)
-    plaintext = json.dumps(data, ensure_ascii=False)
+    plaintext = data if isinstance(data, str) else json.dumps(data, ensure_ascii=False)
     payload = encrypt_nip44(plaintext, conv_key)
 
     del eph_secret
