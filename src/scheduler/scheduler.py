@@ -32,6 +32,11 @@ class Scheduler:
         self._reconnect_event = asyncio.Event()
         self._price_task: asyncio.Task | None = None
         self._current_price: float | None = None
+        # True only between a successful sync and the next disconnect/error.
+        # Surfaced via /api/status as the UI's source of truth for the
+        # connect-banner (the "network" field always carries a fallback value
+        # and can NOT signal connectivity).
+        self.upstream_connected = False
 
     async def start(self) -> None:
         self._running = True
@@ -45,9 +50,12 @@ class Scheduler:
             except asyncio.CancelledError:
                 break
             except Exception as e:
+                self.upstream_connected = False
                 log.error("Scheduler error: %s — reconnecting in %ds", e, backoff)
                 await asyncio.sleep(backoff)
                 backoff = min(backoff * 2, 15)  # Exponential backoff, cap 15s
+            else:
+                self.upstream_connected = False
 
     async def stop(self) -> None:
         self._running = False
@@ -59,6 +67,7 @@ class Scheduler:
     async def reconnect(self) -> None:
         """Disconnect and reconnect to (possibly new) upstream."""
         log.info("Scheduler reconnecting to new upstream...")
+        self.upstream_connected = False
         self._reconnect_event.set()
         if self._upstream:
             await self._upstream.close()
@@ -131,6 +140,7 @@ class Scheduler:
             height = resp["result"]["height"]
             self.store.set_state("current_height", str(height))
             log.info("Scheduler synced at block %d", height)
+            self.upstream_connected = True
             await self._on_new_block(height)
 
         # Set up notification handler for new blocks
@@ -144,8 +154,14 @@ class Scheduler:
                 break  # Reconnect requested
             except asyncio.TimeoutError:
                 pass  # Normal timeout, do ping
+            # reconnect() may have nulled the upstream between the event wait
+            # and this ping (race seen in the field as "'NoneType' object has
+            # no attribute 'call'") — grab a local ref and bail out cleanly.
+            upstream = self._upstream
+            if upstream is None:
+                break
             try:
-                await self._upstream.call("server.ping")
+                await upstream.call("server.ping")
             except Exception:
                 break
 

@@ -770,6 +770,7 @@ async def handle_diagnostics(request: web.Request) -> web.Response:
 async def handle_status(request: web.Request) -> web.Response:
     store: TxStore = request.app["store"]
     proxy = request.app.get("proxy_server")
+    scheduler = request.app.get("scheduler")
     host, port, use_ssl = store.get_upstream()
 
     mtp_raw = store.get_state("current_mtp")
@@ -780,6 +781,9 @@ async def handle_status(request: web.Request) -> web.Response:
         "current_mtp": mtp_ts,
         "connections": proxy.connection_count if proxy else 0,
         "network": store.get_detected_network(),
+        # Real connectivity signal — "network" always carries a fallback value
+        # and must not be used to infer connection state
+        "upstream_connected": bool(scheduler and scheduler.upstream_connected),
         "upstream_host": host,
         "upstream_port": port,
         "upstream_ssl": use_ssl,

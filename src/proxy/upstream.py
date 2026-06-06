@@ -13,6 +13,16 @@ log = logging.getLogger(__name__)
 # Internal IDs start at 1,000,000 to avoid collision with client IDs (typically 1-999)
 _INTERNAL_ID_OFFSET = 1_000_000
 
+# Per-method timeouts (seconds). Header-chunk downloads (up to 2016 headers)
+# can legitimately take minutes on slow/busy servers — a colleague's electrs
+# hit the old flat 30s ceiling and Sparrow's initial sync stalled.
+_DEFAULT_TIMEOUT = 30.0
+_METHOD_TIMEOUTS = {
+    "blockchain.block.headers": 120.0,
+    "blockchain.block.header": 60.0,
+    "blockchain.scripthash.get_history": 60.0,
+}
+
 
 class UpstreamConnection:
     """Manages a single TCP connection to the upstream Electrum server."""
@@ -28,6 +38,9 @@ class UpstreamConnection:
         self._notification_callback = None
         self._passthrough_callback = None  # For forwarding non-internal responses
         self._read_task: asyncio.Task | None = None
+        # Set when the read loop dies (EOF/error): new call()s fail fast
+        # instead of burning their full timeout against a dead socket.
+        self._dead = False
 
     async def connect(self) -> None:
         ssl_ctx = None
@@ -69,6 +82,8 @@ class UpstreamConnection:
         Uses high ID range to avoid collision with client-forwarded requests."""
         if params is None:
             params = []
+        if self._dead:
+            raise ConnectionError("upstream connection is closed")
 
         self._next_id += 1
         msg_id = self._next_id
@@ -90,8 +105,9 @@ class UpstreamConnection:
         log.debug(">> upstream [internal id=%d] %s(params=%d)", msg_id, method, len(params))
 
         start = time.monotonic()
+        timeout = _METHOD_TIMEOUTS.get(method, _DEFAULT_TIMEOUT)
         try:
-            resp = await asyncio.wait_for(future, timeout=30.0)
+            resp = await asyncio.wait_for(future, timeout=timeout)
         except Exception:
             diagnostics.record_upstream_call(method, (time.monotonic() - start) * 1000, ok=False)
             raise
@@ -158,8 +174,18 @@ class UpstreamConnection:
         except asyncio.CancelledError:
             pass
         except Exception as e:
+            self._dead = True
             log.error("Upstream read loop error: %s", e, exc_info=True)
-            for future in self._pending.values():
-                if not future.done():
-                    future.set_exception(e)
-            self._pending.clear()
+            self._fail_pending(e)
+        else:
+            self._dead = True
+            # EOF (server closed the connection): fail in-flight calls right
+            # away instead of letting each one burn its full timeout — the
+            # scheduler keepalive detects the disconnect on the next ping.
+            self._fail_pending(ConnectionError("upstream closed connection"))
+
+    def _fail_pending(self, exc: Exception) -> None:
+        for future in self._pending.values():
+            if not future.done():
+                future.set_exception(exc)
+        self._pending.clear()

@@ -428,7 +428,9 @@ function updateStatus(s) {
   document.getElementById('s-scheduled').textContent = s.scheduled;
   document.getElementById('s-connections').textContent = s.connections;
   const netEl = document.getElementById('s-network');
-  const net = s.network || '--';
+  // "network" always carries a fallback ("mainnet") — only show it when the
+  // upstream is actually connected, otherwise it reads as a false positive.
+  const net = s.upstream_connected ? (s.network || '--') : '--';
   netEl.textContent = net;
   if (net === 'signet') {
     netEl.style.color = 'var(--signet)';
@@ -1655,6 +1657,7 @@ function switchTab(name) {
   if (btn) btn.classList.add('active');
   if (content) content.classList.add('active');
 
+  if (name === 'pool') refresh(); // immediate data, don't wait for the 5s interval
   if (name === 'settings') loadSettingsTab();
   if (name === 'vault') loadVault();
   if (name !== 'vault') clearVault();
@@ -1889,7 +1892,9 @@ function loadConnectInfo(status) {
 
   // Until BP is connected to an Electrum upstream, scheduler can't run and
   // serving the proxy address would mislead the user. Show a prompt instead.
-  const upstreamConnected = !!(status && status.network);
+  // NOTE: status.network is NOT a connectivity signal (it has a "mainnet"
+  // fallback) — use the scheduler's real flag.
+  const upstreamConnected = !!(status && status.upstream_connected);
 
   if (!upstreamConnected) {
     label.textContent = lang === 'es'
