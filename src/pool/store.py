@@ -71,9 +71,32 @@ class TxStore:
     def network(self, value: str) -> None:
         self._network = value
 
+    def _row_to_tx(self, row) -> "RetainedTx":
+        """Build a RetainedTx from a DB row, decrypting raw_hex for consumers.
+
+        raw_hex is stored encrypted at rest (when APP_SEED is set); every reader
+        that touches ``tx.raw_hex`` gets plaintext transparently. crypto.decrypt()
+        is a cheap no-op for unencrypted values (no APP_SEED, or legacy cleartext).
+        """
+        from src.pool.crypto import decrypt
+        from src import config
+        d = dict(row)
+        if d.get("raw_hex"):
+            d["raw_hex"] = decrypt(d["raw_hex"], config.APP_SEED)
+        return RetainedTx(**d)
+
     def save_retained_tx(self, parsed: ParsedTx, raw_hex: str, wallet_label: str = "") -> None:
-        """Save a new retained transaction with its inputs and outputs."""
+        """Save a new retained transaction with its inputs and outputs.
+
+        raw_hex is encrypted at rest immediately (when APP_SEED is set) — retained
+        txs are never persisted in cleartext, not even while 'pending'. encrypt()
+        returns the value unchanged when no APP_SEED is configured.
+        """
         amount_sats = sum(out.value_sats for out in parsed.outputs)
+
+        from src.pool.crypto import encrypt
+        from src import config
+        stored_hex = encrypt(raw_hex, config.APP_SEED)
 
         with self._lock:
             # Next sort_order
@@ -87,7 +110,7 @@ class TxStore:
                 """INSERT OR REPLACE INTO retained_txs
                    (txid, raw_hex, fee_sats, fee_rate, vsize, amount_sats, input_count, output_count, locktime, network, wallet_label, status, sort_order)
                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?)""",
-                (parsed.txid, raw_hex, parsed.fee_sats, parsed.fee_rate,
+                (parsed.txid, stored_hex, parsed.fee_sats, parsed.fee_rate,
                  parsed.vsize, amount_sats, len(parsed.inputs), len(parsed.outputs),
                  parsed.locktime, self._network, wallet_label, next_order),
             )
@@ -124,14 +147,14 @@ class TxStore:
                 "SELECT * FROM retained_txs WHERE network = ? ORDER BY sort_order",
                 (net,),
             ).fetchall()
-        return [RetainedTx(**dict(r)) for r in rows]
+        return [self._row_to_tx(r) for r in rows]
 
     def get_tx(self, txid: str) -> RetainedTx | None:
         """Get a single retained transaction by txid."""
         row = self._conn.execute(
             "SELECT * FROM retained_txs WHERE txid = ?", (txid,)
         ).fetchone()
-        return RetainedTx(**dict(row)) if row else None
+        return self._row_to_tx(row) if row else None
 
     def get_active_txs(self) -> list[RetainedTx]:
         """Get txs that are pending or scheduled (not yet broadcast) for active network."""
@@ -139,7 +162,7 @@ class TxStore:
             "SELECT * FROM retained_txs WHERE network = ? AND status IN ('pending', 'scheduled') ORDER BY sort_order",
             (self._network,),
         ).fetchall()
-        return [RetainedTx(**dict(r)) for r in rows]
+        return [self._row_to_tx(r) for r in rows]
 
     def get_due_txs(self, current_height: int) -> list[RetainedTx]:
         """Get scheduled txs whose target_block <= current_height for active network."""
@@ -149,7 +172,7 @@ class TxStore:
                ORDER BY target_block, sort_order""",
             (self._network, current_height),
         ).fetchall()
-        return [RetainedTx(**dict(r)) for r in rows]
+        return [self._row_to_tx(r) for r in rows]
 
     def get_inputs(self, txid: str) -> list[RetainedInput]:
         rows = self._conn.execute(
@@ -175,7 +198,7 @@ class TxStore:
                ORDER BY t.sort_order""",
             (scripthash, scripthash, self._network),
         ).fetchall()
-        return [RetainedTx(**dict(r)) for r in rows]
+        return [self._row_to_tx(r) for r in rows]
 
     def find_active_txs_spending_utxo(self, prev_txid: str, prev_vout: int) -> list[str]:
         """Return txids of active retained txs whose inputs spend the given UTXO.
@@ -270,22 +293,32 @@ class TxStore:
         ).fetchall()
         return {r["scripthash"] for r in rows}
 
+    def _encrypt_raw_at_rest(self, txid: str) -> None:
+        """Encrypt a tx's raw_hex in place when it becomes 'scheduled'.
+
+        Caller MUST hold self._lock. No-op without APP_SEED or if already
+        encrypted (idempotent). Centralized so every path that moves a tx to
+        'scheduled' encrypts at rest — not just update_status(): the price/block
+        schedulers set status directly and used to leave raw_hex in cleartext.
+        """
+        from src.pool.crypto import encrypt, is_encrypted
+        from src import config
+        if not config.APP_SEED:
+            return
+        row = self._conn.execute(
+            "SELECT raw_hex FROM retained_txs WHERE txid = ?", (txid,)
+        ).fetchone()
+        if row and row["raw_hex"] and not is_encrypted(row["raw_hex"]):
+            enc = encrypt(row["raw_hex"], config.APP_SEED)
+            self._conn.execute(
+                "UPDATE retained_txs SET raw_hex = ? WHERE txid = ?",
+                (enc, txid),
+            )
+
     def update_status(self, txid: str, status: str, error: str | None = None) -> None:
         with self._lock:
-            # Encrypt raw_hex when moving to scheduled
             if status == "scheduled":
-                from src.pool.crypto import encrypt, is_encrypted
-                from src import config
-                if config.APP_SEED:
-                    row = self._conn.execute(
-                        "SELECT raw_hex FROM retained_txs WHERE txid = ?", (txid,)
-                    ).fetchone()
-                    if row and row["raw_hex"] and not is_encrypted(row["raw_hex"]):
-                        enc = encrypt(row["raw_hex"], config.APP_SEED)
-                        self._conn.execute(
-                            "UPDATE retained_txs SET raw_hex = ? WHERE txid = ?",
-                            (enc, txid),
-                        )
+                self._encrypt_raw_at_rest(txid)
 
             self._conn.execute(
                 """UPDATE retained_txs
@@ -387,6 +420,7 @@ class TxStore:
                        WHERE txid = ?""",
                     (target_block, txid),
                 )
+                self._encrypt_raw_at_rest(txid)  # transition to 'scheduled' → encrypt at rest
             self._conn.commit()
 
     def update_target_price(self, txid: str, price: float, direction: str = "below", expires_at: str | None = None) -> None:
@@ -398,6 +432,7 @@ class TxStore:
                    WHERE txid = ?""",
                 (price, direction, expires_at, txid),
             )
+            self._encrypt_raw_at_rest(txid)  # transition to 'scheduled' → encrypt at rest
             self._conn.commit()
 
     def get_price_scheduled_txs(self) -> list["RetainedTx"]:
@@ -408,7 +443,7 @@ class TxStore:
                ORDER BY sort_order""",
             (self.network,),
         ).fetchall()
-        return [RetainedTx(**dict(r)) for r in rows]
+        return [self._row_to_tx(r) for r in rows]
 
     def update_broadcast_time(self, txid: str) -> None:
         with self._lock:

@@ -11,6 +11,24 @@ ELECTRUM_SSL_NOVERIFY = os.environ.get("ELECTRUM_SSL_NOVERIFY", "false").lower()
 PROXY_PORT = int(os.environ.get("PROXY_PORT", "50005"))
 WEB_PORT = int(os.environ.get("WEB_PORT", "4040"))
 
+# Optional Bitcoin node RPC — fallback when the Electrum upstream (electrs) is
+# down/slow: reads height + MTP, broadcasts, and verifies confirmations directly
+# against the node. Works with any node speaking the standard Bitcoin JSON-RPC
+# (Bitcoin Core, Knots, Libre Relay). Opt-in; if unset, behaviour is unchanged.
+# On Umbrel these map to APP_BITCOIN_NODE_IP / APP_BITCOIN_RPC_PORT / *_USER / *_PASS.
+BITCOIN_RPC_HOST = os.environ.get("BITCOIN_RPC_HOST", "")
+BITCOIN_RPC_PORT = int(os.environ.get("BITCOIN_RPC_PORT", "8332"))
+BITCOIN_RPC_USER = os.environ.get("BITCOIN_RPC_USER", "")
+BITCOIN_RPC_PASS = os.environ.get("BITCOIN_RPC_PASS", "")
+BITCOIN_RPC_COOKIE_FILE = os.environ.get("BITCOIN_RPC_COOKIE_FILE", "")
+
+
+def node_rpc_enabled() -> bool:
+    """True when Bitcoin node RPC fallback is configured."""
+    if not BITCOIN_RPC_HOST:
+        return False
+    return bool((BITCOIN_RPC_USER and BITCOIN_RPC_PASS) or BITCOIN_RPC_COOKIE_FILE)
+
 DB_PATH = os.environ.get("DB_PATH", "data/pool.db")
 
 # Rebroadcast txs that fell out of mempool after this many minutes

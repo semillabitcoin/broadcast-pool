@@ -5,11 +5,12 @@ import hashlib
 import json
 import logging
 import struct
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 import aiohttp
 
 from src.pool.store import TxStore
+from src.pool.node_rpc import NodeRPC, NodeRPCError, NodeRPCTransportError
 from src.proxy.upstream import UpstreamConnection
 from src import config
 
@@ -31,17 +32,34 @@ class Scheduler:
         self._running = False
         self._reconnect_event = asyncio.Event()
         self._price_task: asyncio.Task | None = None
+        self._node_task: asyncio.Task | None = None
         self._current_price: float | None = None
         # True only between a successful sync and the next disconnect/error.
         # Surfaced via /api/status as the UI's source of truth for the
         # connect-banner (the "network" field always carries a fallback value
         # and can NOT signal connectivity).
         self.upstream_connected = False
+        # Optional Bitcoin node RPC fallback (None unless BITCOIN_RPC_* configured).
+        # Used to read height/MTP, broadcast, and verify confirmations when the
+        # Electrum upstream is unavailable. See src/pool/node_rpc.py.
+        self._node: NodeRPC | None = NodeRPC.from_config()
+        # True while the last chain read came from the Bitcoin node (electrs down). Surfaced
+        # via /api/status so the fallback is visible, not silent.
+        self.node_fallback_active = False
+        # Warn once if the node lacks txindex=1 (confirmation checks via the node
+        # fallback need it; broadcasting and scheduling do not).
+        self._txindex_warned = False
+        if self._node:
+            log.info("Bitcoin node RPC fallback enabled (%s:%d)", self._node.host, self._node.port)
 
     async def start(self) -> None:
         self._running = True
         # Price poller runs independently of upstream connection
         self._price_task = asyncio.create_task(self._price_poller())
+        # Node-RPC fallback poller: keeps height/MTP + due broadcasts alive when
+        # electrs is down. No-op unless Bitcoin node RPC is configured.
+        if self._node:
+            self._node_task = asyncio.create_task(self._node_fallback_poller())
         backoff = 1
         while self._running:
             try:
@@ -61,6 +79,8 @@ class Scheduler:
         self._running = False
         if self._price_task:
             self._price_task.cancel()
+        if self._node_task:
+            self._node_task.cancel()
         if self._upstream:
             await self._upstream.close()
 
@@ -78,49 +98,58 @@ class Scheduler:
         tx = self.store.get_tx(txid)
         if not tx:
             return {"error": "Transaction not found"}
+        # Shared pre-broadcast gate (expiry + locktime), fail-closed.
+        err = self._check_broadcast_policy(tx)
+        if err:
+            return {"error": err}
+        if tx.status not in ("pending", "scheduled"):
+            return {"error": f"Cannot broadcast tx in status '{tx.status}'"}
+
+        if self._upstream is None and self._node is None:
+            return {"error": "Not connected to upstream"}
+
+        return await self._do_broadcast(tx)
+
+    def _check_broadcast_policy(self, tx) -> str | None:
+        """Shared gate enforced by every broadcast path (manual AND automatic).
+
+        Returns an error string if the tx must NOT be broadcast, else None.
+        Fail-closed: marks the tx 'expired' when expiry is detected or its
+        expires_at is unparseable. Centralizing this here means the automatic
+        paths (by-block, by-timestamp, by-price, node-fallback) can no longer
+        emit an expired or not-yet-unlocked tx by going straight to _do_broadcast.
+        """
         if tx.status == "expired":
-            return {"error": "Transaction expired — cannot broadcast"}
-        # Check expiry even if status hasn't been updated yet (fail-closed)
+            return "Transaction expired — cannot broadcast"
+        # Expiry (fail-closed) — check even if status hasn't been updated yet.
         if tx.expires_at:
             try:
                 exp = datetime.fromisoformat(tx.expires_at.replace("Z", "+00:00"))
                 if exp.tzinfo is None:
-                    exp = exp.replace(tzinfo=None)
                     now = datetime.utcnow()
                 else:
-                    from datetime import timezone
                     now = datetime.now(timezone.utc)
                 if now >= exp:
                     self.store.update_status(tx.txid, "expired")
-                    return {"error": "Transaction expired — cannot broadcast"}
+                    return "Transaction expired — cannot broadcast"
             except Exception as e:
                 log.error("Cannot parse expires_at for %s: %s", tx.txid[:16], e)
-                return {"error": "Cannot verify expiration — refusing to broadcast"}
-        if tx.status not in ("pending", "scheduled"):
-            return {"error": f"Cannot broadcast tx in status '{tx.status}'"}
-
-        # Check locktime constraints before broadcasting
+                return "Cannot verify expiration — refusing to broadcast"
+        # Locktime constraints.
         if tx.locktime >= LOCKTIME_THRESHOLD:
             mtp_raw = self.store.get_state("current_mtp")
             mtp = int(mtp_raw) if mtp_raw else 0
             if mtp and mtp <= tx.locktime:
-                from datetime import datetime, timezone
                 lock_dt = datetime.fromtimestamp(tx.locktime, tz=timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
                 mtp_dt = datetime.fromtimestamp(mtp, tz=timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
-                return {
-                    "error": f"Locktime no alcanzado. La tx tiene locktime {lock_dt} pero el MTP actual es {mtp_dt}. Hay que esperar."
-                }
+                return (f"Locktime no alcanzado. La tx tiene locktime {lock_dt} "
+                        f"pero el MTP actual es {mtp_dt}. Hay que esperar.")
         elif 0 < tx.locktime < LOCKTIME_THRESHOLD:
             current_height = self.store.get_current_height()
             if current_height and current_height < tx.locktime:
-                return {
-                    "error": f"Locktime no alcanzado. La tx requiere bloque {tx.locktime} pero estamos en {current_height}."
-                }
-
-        if not self._upstream:
-            return {"error": "Not connected to upstream"}
-
-        return await self._do_broadcast(tx)
+                return (f"Locktime no alcanzado. La tx requiere bloque {tx.locktime} "
+                        f"pero estamos en {current_height}.")
+        return None
 
     async def _run(self) -> None:
         """Main scheduler loop."""
@@ -178,6 +207,8 @@ class Scheduler:
 
     async def _on_new_block(self, height: int) -> None:
         """Handle a new block: broadcast due txs, check confirmations, detect conflicts."""
+        # Block arrived via electrs → it's the live transport, not the node fallback.
+        self.node_fallback_active = False
         # Calculate and store MTP
         mtp = await self._compute_mtp(height)
         if mtp:
@@ -196,11 +227,7 @@ class Scheduler:
             log.info("Liana faking auto-disabled: real height %d reached cutoff %d", height, disable_at)
 
         # Broadcast due transactions (by block height)
-        due_txs = self.store.get_due_txs(height)
-        for tx in due_txs:
-            result = await self._do_broadcast(tx)
-            if "error" not in result:
-                log.info("Broadcast scheduled tx %s at block %d", tx.txid[:16], height)
+        await self._broadcast_due_by_block(height)
 
         # Broadcast txs with timestamp locktime that MTP has passed
         if mtp:
@@ -277,6 +304,55 @@ class Scheduler:
             log.debug("Price fetch failed from %s: %s", source, e)
             return None
 
+    async def _broadcast_due_by_block(self, height: int) -> None:
+        """Broadcast txs whose target block height has been reached."""
+        for tx in self.store.get_due_txs(height):
+            result = await self._do_broadcast(tx)
+            if "error" not in result:
+                log.info("Broadcast scheduled tx %s at block %d", tx.txid[:16], height)
+
+    async def _node_fallback_poller(self) -> None:
+        """When electrs is down, drive height/MTP + due broadcasts from Bitcoin node.
+
+        No-op while the Electrum upstream is connected (electrs is authoritative).
+        Only runs when BITCOIN_RPC_* is configured (self._node is not None).
+        """
+        while self._running:
+            try:
+                if not self.upstream_connected and self._node is not None:
+                    await self._node_fallback_tick()
+            except asyncio.CancelledError:
+                break
+            except Exception as e:
+                log.debug("Node fallback tick error: %s", e)
+            await asyncio.sleep(30)
+
+    async def _node_fallback_tick(self) -> None:
+        """One fallback cycle: refresh height/MTP from the Bitcoin node and process due txs."""
+        info = await self._node.health()
+        if not info:
+            return
+        height = info.get("blocks")
+        mtp = info.get("mediantime")  # the node's mediantime IS the tip's MTP (BIP-113)
+        if not height:
+            return
+
+        prev = self.store.get_current_height() or 0
+        self.store.set_state("current_height", str(height))
+        if mtp:
+            self.store.set_state("current_mtp", str(mtp))
+        self.node_fallback_active = True
+        if height != prev:
+            log.info("Node fallback: height=%d mtp=%s (electrs unavailable)", height, mtp)
+
+        # Drive the same due-broadcast logic the electrs block handler would.
+        await self._broadcast_due_by_block(height)
+        if mtp:
+            await self._broadcast_due_by_timestamp(mtp)
+        await self._check_price_triggers()
+        self._purge_expired_txs()
+        await self._check_confirmations()
+
     async def _check_price_triggers(self) -> None:
         """Broadcast txs whose price trigger has been hit."""
         if not self._current_price:
@@ -340,6 +416,14 @@ class Scheduler:
         if _depth > 10:
             return {"error": "Dependency chain too deep (>10 levels)"}
 
+        # Safety net: every automatic path (by-block, by-timestamp, by-price,
+        # node-fallback) funnels through here, so re-assert the broadcast policy
+        # to never emit an expired or not-yet-unlocked tx (covers purge races).
+        err = self._check_broadcast_policy(tx)
+        if err:
+            log.info("Skipping broadcast of %s: %s", tx.txid[:16], err)
+            return {"error": err}
+
         # Check if this tx depends on a parent that hasn't been broadcast yet
         if tx.depends_on:
             parent = self.store.get_tx(tx.depends_on)
@@ -366,40 +450,96 @@ class Scheduler:
             self.store.update_status(tx.txid, "failed", error="Cannot decrypt transaction")
             return {"error": "Cannot decrypt transaction"}
 
-        try:
-            resp = await self._upstream.call(
-                "blockchain.transaction.broadcast", [raw_hex]
-            )
+        # Relay via electrs, falling back to Bitcoin node RPC if configured.
+        outcome = await self._relay_raw(raw_hex)
+        kind = outcome["kind"]
 
-            if "error" in resp:
-                error_msg = resp["error"].get("message", str(resp["error"]))
-                # Check if already in mempool or blockchain (not a real error)
-                if "already" in error_msg.lower():
-                    self.store.update_broadcast_time(tx.txid)
-                    log.info("Tx %s already in mempool/chain", tx.txid[:16])
-                    return {"txid": tx.txid}
-                else:
-                    # Detect if inputs are spent (abandoned) vs other errors (failed)
-                    is_spent = any(k in error_msg.lower() for k in
-                                   ["missing", "missingorspent", "spent", "conflict", "duplicate"])
-                    status = "abandoned" if is_spent else "failed"
-                    self.store.update_status(tx.txid, status, error=error_msg)
-                    log.warning("Broadcast %s for %s: %s", status, tx.txid[:16], error_msg)
-                    return {"error": error_msg}
-            else:
-                self.store.update_broadcast_time(tx.txid)
-                # Notify connected wallets
-                if self.notify_callback:
-                    affected = self.store.get_scripthashes_for_tx(tx.txid)
-                    await self.notify_callback(affected)
-                return {"txid": resp.get("result", tx.txid)}
-
-        except Exception as e:
-            # Network/timeout error — tx may have reached the mempool anyway.
-            # Keep status as 'broadcasting' so _check_confirmations verifies it.
+        if kind in ("success", "already"):
             self.store.update_broadcast_time(tx.txid)
-            log.warning("Broadcast exception for %s (will verify): %s", tx.txid[:16], e)
-            return {"txid": tx.txid, "warning": str(e)}
+            if kind == "already":
+                log.info("Tx %s already in mempool/chain", tx.txid[:16])
+            # Notify connected wallets
+            if self.notify_callback:
+                affected = self.store.get_scripthashes_for_tx(tx.txid)
+                await self.notify_callback(affected)
+            return {"txid": outcome.get("txid") or tx.txid, "via": outcome.get("via")}
+
+        if kind == "reject":
+            # Definitive node-side refusal: inputs spent → abandoned, else failed.
+            status = "abandoned" if outcome.get("spent") else "failed"
+            self.store.update_status(tx.txid, status, error=outcome["error"])
+            log.warning("Broadcast %s for %s: %s", status, tx.txid[:16], outcome["error"])
+            return {"error": outcome["error"]}
+
+        # kind == "unreachable": no transport reached the network — the tx may have
+        # landed anyway. Keep 'broadcasting' so _check_confirmations verifies it.
+        self.store.update_broadcast_time(tx.txid)
+        log.warning("Broadcast unreachable for %s (will verify): %s", tx.txid[:16], outcome["error"])
+        return {"txid": tx.txid, "warning": outcome["error"]}
+
+    async def _relay_raw(self, raw_hex: str) -> dict:
+        """Send a raw tx to the network: electrs first, Bitcoin node RPC as fallback.
+
+        Returns a normalized outcome dict with "kind" one of:
+          - "success"     reached the network ("txid", "via")
+          - "already"     already in mempool/chain ("via")
+          - "reject"      node refused it ("error", "spent": bool, "via")
+          - "unreachable" no transport reached the network ("error")
+        """
+        electrum_err = None
+
+        # 1) Electrum upstream (primary path)
+        if self._upstream is not None:
+            try:
+                resp = await self._upstream.call(
+                    "blockchain.transaction.broadcast", [raw_hex]
+                )
+                if "error" in resp:
+                    msg = resp["error"].get("message", str(resp["error"]))
+                    return self._classify_electrum_send_error(msg)
+                return {"kind": "success", "txid": resp.get("result"), "via": "electrs"}
+            except Exception as e:
+                electrum_err = e
+                log.warning("electrs broadcast failed (%s)%s", e,
+                            " — trying Bitcoin node" if self._node else "")
+
+        # 2) Bitcoin node RPC (fallback)
+        if self._node is not None:
+            try:
+                txid = await self._node.sendrawtransaction(raw_hex)
+                log.info("Broadcast via Bitcoin node RPC%s",
+                         " (electrs unavailable)" if electrum_err else "")
+                return {"kind": "success", "txid": txid, "via": "node"}
+            except NodeRPCError as e:
+                outcome = self._classify_node_send_error(e)
+                if outcome["kind"] != "unreachable":
+                    return outcome
+                electrum_err = electrum_err or e
+            except Exception as e:
+                electrum_err = electrum_err or e
+
+        return {"kind": "unreachable", "error": str(electrum_err or "no broadcast transport")}
+
+    @staticmethod
+    def _classify_electrum_send_error(msg: str) -> dict:
+        low = msg.lower()
+        if "already" in low:
+            return {"kind": "already", "via": "electrs"}
+        spent = any(k in low for k in
+                    ["missing", "missingorspent", "spent", "conflict", "duplicate"])
+        return {"kind": "reject", "error": msg, "spent": spent, "via": "electrs"}
+
+    @staticmethod
+    def _classify_node_send_error(e: NodeRPCError) -> dict:
+        # A transport/auth failure is not a node decision about the tx.
+        if isinstance(e, NodeRPCTransportError) or e.code is None:
+            return {"kind": "unreachable", "error": e.message}
+        low = e.message.lower()
+        if e.code == -27 or "already" in low:  # already in chain/mempool
+            return {"kind": "already", "via": "node"}
+        spent = e.code == -25 or any(k in low for k in
+                                     ["missing", "missingorspent", "spent", "conflict", "txn-mempool-conflict"])
+        return {"kind": "reject", "error": e.message, "spent": spent, "via": "node"}
 
     async def _check_confirmations(self) -> None:
         """Check if broadcasting or failed txs have been confirmed.
@@ -430,25 +570,64 @@ class Scheduler:
                 except Exception:
                     pass
 
-            scripthashes = self.store.get_scripthashes_for_tx(tx.txid)
-            if not scripthashes:
-                continue
+            confirmed_height = await self._confirmation_height(tx)
+            if confirmed_height and confirmed_height > 0:
+                self.store.set_confirmed(tx.txid, confirmed_height)
+                log.info("Confirmed tx %s at block %d", tx.txid[:16], confirmed_height)
+                if self.notify_callback:
+                    scripthashes = self.store.get_scripthashes_for_tx(tx.txid)
+                    if scripthashes:
+                        await self.notify_callback(scripthashes)
 
-            sh = next(iter(scripthashes))
+    async def _confirmation_height(self, tx) -> int | None:
+        """Block height a tx confirmed at, or None if unconfirmed/unknown.
+
+        electrs (scripthash history) is authoritative when reachable; on failure
+        it falls back to Bitcoin node (getrawtransaction → getblockheader, which
+        needs txindex=1 on the node).
+        """
+        # 1) electrs via scripthash history
+        if self._upstream is not None:
+            sh = next(iter(self.store.get_scripthashes_for_tx(tx.txid)), None)
+            if sh:
+                try:
+                    resp = await self._upstream.call(
+                        "blockchain.scripthash.get_history", [sh]
+                    )
+                    for h in resp.get("result", []):
+                        if h["tx_hash"] == tx.txid and h.get("height", 0) > 0:
+                            return h["height"]
+                    return None  # electrs answered: seen-but-unconfirmed or absent
+                except Exception as e:
+                    log.debug("electrs confirmation check failed for %s: %s", tx.txid[:16], e)
+
+        # 2) Bitcoin node fallback (getrawtransaction needs txindex=1)
+        if self._node is not None:
             try:
-                resp = await self._upstream.call(
-                    "blockchain.scripthash.get_history", [sh]
-                )
-                history = resp.get("result", [])
-                for h in history:
-                    if h["tx_hash"] == tx.txid and h.get("height", 0) > 0:
-                        self.store.set_confirmed(tx.txid, h["height"])
-                        log.info("Confirmed tx %s at block %d", tx.txid[:16], h["height"])
-                        if self.notify_callback:
-                            await self.notify_callback(scripthashes)
-                        break
+                info = await self._node.getrawtransaction(tx.txid, True)
+                blockhash = info.get("blockhash")
+                if blockhash:
+                    hdr = await self._node.getblockheader(blockhash)
+                    return hdr.get("height")
+            except NodeRPCError as e:
+                if self._is_txindex_missing(e):
+                    if not self._txindex_warned:
+                        self._txindex_warned = True
+                        log.warning(
+                            "Bitcoin node has no txindex=1 — confirmation checks via the "
+                            "node fallback are unavailable (broadcasting and scheduling are "
+                            "unaffected). Enable txindex=1 for full fallback coverage."
+                        )
+                else:
+                    log.debug("Bitcoin node confirmation check failed for %s: %s", tx.txid[:16], e)
             except Exception as e:
-                log.debug("Failed to check confirmation for %s: %s", tx.txid[:16], e)
+                log.debug("Bitcoin node confirmation check failed for %s: %s", tx.txid[:16], e)
+        return None
+
+    @staticmethod
+    def _is_txindex_missing(e: NodeRPCError) -> bool:
+        """True when a getrawtransaction error is the 'enable -txindex' hint."""
+        return "txindex" in (getattr(e, "message", "") or "").lower()
 
     async def _rebroadcast_stuck(self) -> None:
         """Rebroadcast txs that fell out of mempool."""
@@ -469,10 +648,9 @@ class Scheduler:
                     raw = self.store.get_raw_hex(tx.txid)
                     if not raw or raw.startswith("["):
                         continue
-                    await self._upstream.call(
-                        "blockchain.transaction.broadcast", [raw]
-                    )
-                    self.store.update_broadcast_time(tx.txid)
+                    outcome = await self._relay_raw(raw)
+                    if outcome["kind"] in ("success", "already"):
+                        self.store.update_broadcast_time(tx.txid)
                 except Exception as e:
                     log.debug("Rebroadcast failed for %s: %s", tx.txid[:16], e)
 

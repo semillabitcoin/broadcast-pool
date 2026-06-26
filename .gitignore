@@ -22,3 +22,5 @@ logs/
 .pytest_cache/
 broadcast-pool-export-*
 bp-diagnostics-*.txt
+CODEXRW.md
+CLAUDERW.md

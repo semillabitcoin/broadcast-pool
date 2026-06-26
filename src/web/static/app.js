@@ -1895,11 +1895,21 @@ function loadConnectInfo(status) {
   // NOTE: status.network is NOT a connectivity signal (it has a "mainnet"
   // fallback) — use the scheduler's real flag.
   const upstreamConnected = !!(status && status.upstream_connected);
+  const nodeFallbackActive = !!(status && status.node_fallback_active);
 
   if (!upstreamConnected) {
-    label.textContent = lang === 'es'
-      ? 'Conecta Broadcast Pool a un servidor Electrum para continuar'
-      : 'Connect Broadcast Pool to an Electrum server to continue';
+    // electrs is down — but if the Bitcoin node fallback is driving the chain,
+    // broadcasting and scheduling are still alive. Say so, don't imply the app
+    // is dead (the wallet data-path still needs electrs, hence no proxy address).
+    if (nodeFallbackActive) {
+      label.textContent = lang === 'es'
+        ? 'Electrum desconectado — usando el nodo Bitcoin como respaldo (difusión y programación activas)'
+        : 'Electrum disconnected — using the Bitcoin node as fallback (broadcasting and scheduling active)';
+    } else {
+      label.textContent = lang === 'es'
+        ? 'Conecta Broadcast Pool a un servidor Electrum para continuar'
+        : 'Connect Broadcast Pool to an Electrum server to continue';
+    }
     code.style.display = 'none';
     if (copyBtn) copyBtn.style.display = 'none';
     return;

@@ -30,6 +30,7 @@ developer: Semilla Bitcoin
 website: https://semillabitcoin.com
 dependencies:
   - electrs
+  - bitcoin
 repo: https://github.com/semillabitcoin/broadcast-pool
 support: https://github.com/semillabitcoin/broadcast-pool/issues
 icon: https://raw.githubusercontent.com/semillabitcoin/umbrel-app-store/main/semillabitcoin-broadcast-pool/icon.png

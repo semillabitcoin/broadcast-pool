@@ -784,6 +784,10 @@ async def handle_status(request: web.Request) -> web.Response:
         # Real connectivity signal — "network" always carries a fallback value
         # and must not be used to infer connection state
         "upstream_connected": bool(scheduler and scheduler.upstream_connected),
+        # Bitcoin node RPC fallback (Core/Knots/Libre Relay): configured, and whether
+        # it's currently the active chain source (electrs down). See src/pool/node_rpc.py.
+        "node_rpc_enabled": config.node_rpc_enabled(),
+        "node_fallback_active": bool(scheduler and getattr(scheduler, "node_fallback_active", False)),
         "upstream_host": host,
         "upstream_port": port,
         "upstream_ssl": use_ssl,
