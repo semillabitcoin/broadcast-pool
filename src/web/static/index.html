@@ -16,6 +16,7 @@
     </div>
     <div style="display:flex;gap:8px;align-items:center;">
       <span id="price-display" style="display:none;font-size:13px;color:var(--text-muted);margin-right:4px"></span>
+      <span id="node-fallback-dot" class="nfb-light" style="display:none" title="" tabindex="0" role="status"></span>
       <button class="small secondary" id="unit-btn" onclick="toggleUnit()" style="font-size:12px;padding:4px 10px;">sats</button>
       <button class="small secondary" id="lang-btn" onclick="toggleLang()" style="font-size:12px;padding:4px 10px;">EN</button>
     </div>
@@ -72,11 +73,6 @@
       <button class="copy-btn" onclick="copyConnectValue('connect-lan')" title="Copiar">&#128203;</button>
     </div>
 
-    <!-- Bitcoin node fallback indicator (only shown when BITCOIN_RPC is configured) -->
-    <div id="node-fallback-badge" class="node-fallback-badge" style="display:none;">
-      <span class="nfb-dot"></span>
-      <span id="node-fallback-text"></span>
-    </div>
 
     <div class="actions-bar">
       <span id="lbl-pool-actions" style="font-size:13px;color:var(--text-muted);font-weight:600">Pool:</span>

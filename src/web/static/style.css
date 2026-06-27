@@ -313,32 +313,21 @@ h1 { font-size: 24px; font-weight: 600; margin-bottom: 4px; }
 }
 .connect-banner .copy-btn:hover { color: var(--text); }
 
-/* Bitcoin node fallback indicator */
-.node-fallback-badge {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-2);
-  font-size: 12px;
-  padding: var(--space-1) var(--space-2);
-  border-radius: var(--radius-md);
-  border: 1px solid var(--border);
-  background: var(--bg-card);
-  color: var(--text-muted);
-  margin: 0 0 var(--space-3);
-}
-.node-fallback-badge .nfb-dot {
-  width: 8px;
-  height: 8px;
+/* Bitcoin node fallback status light (header pilot, meaning via tooltip) */
+.nfb-light {
+  width: 9px;
+  height: 9px;
   border-radius: 50%;
-  background: var(--text-muted);
+  display: inline-block;
   flex: none;
+  background: var(--text-muted);
+  cursor: help;
+  outline: none;
 }
-.node-fallback-badge.nfb-ready { color: var(--green); border-color: var(--green); }
-.node-fallback-badge.nfb-ready .nfb-dot { background: var(--green); }
-.node-fallback-badge.nfb-active { color: var(--amber, #d29922); border-color: var(--amber, #d29922); }
-.node-fallback-badge.nfb-active .nfb-dot { background: var(--amber, #d29922); }
-.node-fallback-badge.nfb-down { color: var(--red); border-color: var(--red); }
-.node-fallback-badge.nfb-down .nfb-dot { background: var(--red); }
+.nfb-light.nfb-ready  { background: var(--green); box-shadow: 0 0 5px var(--green); }
+.nfb-light.nfb-active { background: var(--amber, #d29922); box-shadow: 0 0 5px var(--amber, #d29922); }
+.nfb-light.nfb-down   { background: var(--red); box-shadow: 0 0 5px var(--red); }
+.nfb-light.nfb-unknown { background: var(--text-muted); }
 
 /* Inline <code> uses of kbd-mono:
    1) each pill stays on one line (no mid-content break)

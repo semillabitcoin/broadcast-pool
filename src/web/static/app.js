@@ -95,9 +95,9 @@ const i18n = {
     priceSource: 'Fuente', priceNone: 'Seleccionar...', priceCustom: 'Or\u00e1culo local',
     priceSchedule: 'Retransmitir si BTC', priceBelow: 'cae por debajo de', priceAbove: 'sube por encima de',
     priceExpiry: 'Caduca', priceExpired: 'expirada',
-    nfbReady: 'Respaldo nodo Bitcoin: en espera ✓',
-    nfbActive: 'Respaldo nodo Bitcoin: ACTIVO (electrs caído)',
-    nfbDown: 'Respaldo nodo Bitcoin: no disponible',
+    nfbReady: 'Respaldo nodo Bitcoin en espera: electrs OK; si falla, el nodo toma el relevo',
+    nfbActive: 'Respaldo nodo Bitcoin ACTIVO: electrs caído, operando vía el nodo',
+    nfbDown: 'Respaldo nodo Bitcoin no disponible: el nodo no responde',
     nfbChecking: 'Respaldo nodo Bitcoin: comprobando…',
     poolExport: 'Exportar pool', poolImport: 'Importar pool',
     exportModalTitle: 'Exportar pool',
@@ -226,9 +226,9 @@ const i18n = {
     priceSource: 'Source', priceNone: 'Select...', priceCustom: 'Local oracle',
     priceSchedule: 'Broadcast if BTC', priceBelow: 'drops below', priceAbove: 'rises above',
     priceExpiry: 'Expires', priceExpired: 'expired',
-    nfbReady: 'Bitcoin node fallback: ready ✓',
-    nfbActive: 'Bitcoin node fallback: ACTIVE (electrs down)',
-    nfbDown: 'Bitcoin node fallback: unreachable',
+    nfbReady: 'Bitcoin node fallback on standby: electrs OK; the node takes over if it fails',
+    nfbActive: 'Bitcoin node fallback ACTIVE: electrs down, running via the node',
+    nfbDown: 'Bitcoin node fallback unavailable: the node is not responding',
     nfbChecking: 'Bitcoin node fallback: checking…',
     poolExport: 'Export pool', poolImport: 'Import pool',
     exportModalTitle: 'Export pool',
@@ -431,15 +431,15 @@ async function refresh() {
 }
 
 function renderNodeFallback(s) {
-  // Always-on indicator of the Bitcoin node fallback (Core/Knots/Libre Relay):
-  // shown whenever BITCOIN_RPC is configured, so the user knows the safety net is
-  // there BEFORE electrs ever fails — not only once it kicks in.
-  const badge = document.getElementById('node-fallback-badge');
-  const text = document.getElementById('node-fallback-text');
-  if (!badge || !text) return;
-  if (!s || !s.node_rpc_enabled) { badge.style.display = 'none'; return; }
-  badge.style.display = '';
-  badge.classList.remove('nfb-ready', 'nfb-active', 'nfb-down', 'nfb-unknown');
+  // Small status light (green/amber/red) in the header for the Bitcoin node
+  // fallback (Core/Knots/Libre Relay). Shown whenever BITCOIN_RPC is configured,
+  // so the safety net is visible BEFORE electrs ever fails. Meaning is in the
+  // hover tooltip — no text in the header.
+  const dot = document.getElementById('node-fallback-dot');
+  if (!dot) return;
+  if (!s || !s.node_rpc_enabled) { dot.style.display = 'none'; return; }
+  dot.style.display = '';
+  dot.classList.remove('nfb-ready', 'nfb-active', 'nfb-down', 'nfb-unknown');
   let cls, key;
   if (s.node_fallback_active) {
     cls = 'nfb-active'; key = 'nfbActive';
@@ -450,8 +450,9 @@ function renderNodeFallback(s) {
   } else {
     cls = 'nfb-unknown'; key = 'nfbChecking';
   }
-  badge.classList.add(cls);
-  text.textContent = t(key);
+  dot.classList.add(cls);
+  dot.title = t(key);
+  dot.setAttribute('aria-label', t(key));
 }
 
 function updateStatus(s) {
