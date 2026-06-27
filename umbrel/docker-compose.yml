@@ -10,7 +10,7 @@ services:
       PROXY_AUTH_ADD: "true"
 
   app:
-    image: ghcr.io/semillabitcoin/broadcast-pool:v0.3.20@sha256:4c20afc089e41a94b89d2556c3340b287db9501193df24882b6b470ca01a614a
+    image: ghcr.io/semillabitcoin/broadcast-pool:v0.3.21@sha256:d59e083c5cf09f239a421e80bb013849e4f1e487e1c7c67c235f633e9573e051
     init: true
     restart: on-failure
     stop_grace_period: 1m

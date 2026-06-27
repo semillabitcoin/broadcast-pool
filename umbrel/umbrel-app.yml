@@ -2,7 +2,7 @@ manifestVersion: 1
 id: semillabitcoin-broadcast-pool
 category: bitcoin
 name: Broadcast Pool
-version: "0.3.20"
+version: "0.3.21"
 tagline: Schedule Bitcoin transaction broadcasts
 description: >-
   Electrum proxy that intercepts signed transactions from Sparrow, Liana or
@@ -15,17 +15,18 @@ description: >-
 
   Inspired by Craig Raw's Broadcast Pool proposal (bitcoin/bitcoin#30471).
 releaseNotes: >-
-  v0.3.20 — Reliability fixes driven by the first field diagnostics
-  reports. Slow Electrum servers no longer stall wallet sync: header
-  downloads get a 120s budget (the previous flat 30s timeout aborted
-  Sparrow's initial sync on busy nodes). The dashboard now reports real
-  upstream connectivity — the status bar and connect banner reflect
-  disconnects within seconds instead of showing stale state. Fixed a
-  scheduler race when saving Electrum settings that logged
-  "NoneType object has no attribute call". The Pool tab refreshes
-  immediately when opened. Includes everything from v0.3.19:
-  collections, BIP-329 export, selective export, diagnostics report,
-  and the batched-request performance fix.
+  v0.3.21 — Bitcoin node fallback: when your Electrum server (electrs)
+  is down or slow, Broadcast Pool keeps working by reading height/MTP,
+  broadcasting and verifying confirmations directly against your Bitcoin
+  node (Core, Knots or Libre Relay). A status light in the header shows
+  the fallback as ready / active / unavailable. At-rest encryption moves
+  to standard AES-256-GCM and a one-time startup sweep encrypts any
+  retained transaction left in cleartext by earlier versions. Fixes a bug
+  where price-scheduled transactions could not be rebroadcast, and
+  centralizes the pre-broadcast safety checks so no path can emit an
+  expired or not-yet-unlocked transaction. The dashboard is gated behind
+  Umbrel login. Security: aiohttp updated to 3.14.1. Requires the Bitcoin
+  app; confirmation lookups via the node need txindex=1.
 developer: Semilla Bitcoin
 website: https://semillabitcoin.com
 dependencies:
