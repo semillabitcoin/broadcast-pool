@@ -315,6 +315,37 @@ class TxStore:
                 (enc, txid),
             )
 
+    def encrypt_existing_at_rest(self) -> int:
+        """One-time migration: encrypt any cleartext raw_hex still on disk.
+
+        Older versions (and the pre-fix scheduling paths) left some retained txs
+        in cleartext at rest. On startup, when APP_SEED is set, sweep them into
+        ENC:v2. Idempotent — already-encrypted rows and non-tx placeholders are
+        skipped. Returns the number of rows encrypted.
+        """
+        from src.pool.crypto import encrypt, is_encrypted
+        from src import config
+        if not config.APP_SEED:
+            return 0
+        with self._lock:
+            rows = self._conn.execute(
+                "SELECT txid, raw_hex FROM retained_txs WHERE raw_hex != ''"
+            ).fetchall()
+            updated = 0
+            for r in rows:
+                raw = r["raw_hex"]
+                # Skip already-encrypted and the "[...]" decrypt-failure placeholder.
+                if is_encrypted(raw) or raw.startswith("["):
+                    continue
+                self._conn.execute(
+                    "UPDATE retained_txs SET raw_hex = ? WHERE txid = ?",
+                    (encrypt(raw, config.APP_SEED), r["txid"]),
+                )
+                updated += 1
+            if updated:
+                self._conn.commit()
+            return updated
+
     def update_status(self, txid: str, status: str, error: str | None = None) -> None:
         with self._lock:
             if status == "scheduled":

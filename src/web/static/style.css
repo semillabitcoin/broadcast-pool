@@ -313,6 +313,33 @@ h1 { font-size: 24px; font-weight: 600; margin-bottom: 4px; }
 }
 .connect-banner .copy-btn:hover { color: var(--text); }
 
+/* Bitcoin node fallback indicator */
+.node-fallback-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: 12px;
+  padding: var(--space-1) var(--space-2);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border);
+  background: var(--bg-card);
+  color: var(--text-muted);
+  margin: 0 0 var(--space-3);
+}
+.node-fallback-badge .nfb-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--text-muted);
+  flex: none;
+}
+.node-fallback-badge.nfb-ready { color: var(--green); border-color: var(--green); }
+.node-fallback-badge.nfb-ready .nfb-dot { background: var(--green); }
+.node-fallback-badge.nfb-active { color: var(--amber, #d29922); border-color: var(--amber, #d29922); }
+.node-fallback-badge.nfb-active .nfb-dot { background: var(--amber, #d29922); }
+.node-fallback-badge.nfb-down { color: var(--red); border-color: var(--red); }
+.node-fallback-badge.nfb-down .nfb-dot { background: var(--red); }
+
 /* Inline <code> uses of kbd-mono:
    1) each pill stays on one line (no mid-content break)
    2) thin vertical padding so consecutive pills don't overlap when the line wraps */

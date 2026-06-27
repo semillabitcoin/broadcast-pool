@@ -46,6 +46,10 @@ class Scheduler:
         # True while the last chain read came from the Bitcoin node (electrs down). Surfaced
         # via /api/status so the fallback is visible, not silent.
         self.node_fallback_active = False
+        # Last health-probe result for the node (None until first probe). Lets the
+        # dashboard show "fallback ready" while electrs is still up, instead of only
+        # revealing the node once electrs has already failed.
+        self.node_reachable: bool | None = None
         # Warn once if the node lacks txindex=1 (confirmation checks via the node
         # fallback need it; broadcasting and scheduling do not).
         self._txindex_warned = False
@@ -319,17 +323,25 @@ class Scheduler:
         """
         while self._running:
             try:
-                if not self.upstream_connected and self._node is not None:
-                    await self._node_fallback_tick()
+                if self._node is not None:
+                    if not self.upstream_connected:
+                        # electrs down → the node drives the chain AND proves it's reachable
+                        await self._node_fallback_tick()
+                    else:
+                        # electrs healthy → probe the node anyway so the dashboard can
+                        # show the fallback is ready/reachable, not just when it kicks in
+                        self.node_reachable = bool(await self._node.health())
             except asyncio.CancelledError:
                 break
             except Exception as e:
-                log.debug("Node fallback tick error: %s", e)
+                self.node_reachable = False
+                log.debug("Node fallback/health tick error: %s", e)
             await asyncio.sleep(30)
 
     async def _node_fallback_tick(self) -> None:
         """One fallback cycle: refresh height/MTP from the Bitcoin node and process due txs."""
         info = await self._node.health()
+        self.node_reachable = bool(info)
         if not info:
             return
         height = info.get("blocks")

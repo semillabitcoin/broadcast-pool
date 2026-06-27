@@ -45,6 +45,12 @@ async def main():
     log.info("Database initialized at %s", config.DB_PATH)
     if not config.APP_SEED:
         log.warning("APP_SEED not set — transaction encryption DISABLED")
+    else:
+        # One-time sweep: encrypt any cleartext raw_hex left at rest by older
+        # versions (pre-fix price/block scheduling stored it in cleartext).
+        migrated = store.encrypt_existing_at_rest()
+        if migrated:
+            log.info("Encrypted %d retained tx(s) that were cleartext at rest", migrated)
 
     # Create components — proxy and scheduler reference each other, so wire scheduler
     # into proxy after both exist (proxy is built first because Scheduler needs it).

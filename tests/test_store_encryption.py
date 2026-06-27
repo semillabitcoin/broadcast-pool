@@ -88,3 +88,28 @@ def test_update_status_scheduled_encrypts(store):
     store.update_status(txid, "scheduled")
     assert _raw_at_rest(store, txid).startswith("ENC:v2:")
     assert store.get_raw_hex(txid) == RAW
+
+
+def test_encrypt_existing_at_rest_sweeps_cleartext(store):
+    # Simulate older/buggy data: force two rows to cleartext on disk.
+    for txid in ("a" * 64, "b" * 64):
+        store.save_retained_tx(_parsed(txid), RAW)
+        store._conn.execute("UPDATE retained_txs SET raw_hex=? WHERE txid=?", (RAW, txid))
+    store._conn.commit()
+    assert _raw_at_rest(store, "a" * 64) == RAW  # cleartext on disk
+
+    n = store.encrypt_existing_at_rest()
+    assert n == 2
+    assert _raw_at_rest(store, "a" * 64).startswith("ENC:v2:")
+    assert _raw_at_rest(store, "b" * 64).startswith("ENC:v2:")
+    assert store.get_raw_hex("a" * 64) == RAW           # still decryptable
+    assert store.encrypt_existing_at_rest() == 0        # idempotent
+
+
+def test_encrypt_existing_skips_placeholder(store):
+    txid = "d" * 64
+    store.save_retained_tx(_parsed(txid), RAW)
+    store._conn.execute("UPDATE retained_txs SET raw_hex='[unresolved]' WHERE txid=?", (txid,))
+    store._conn.commit()
+    assert store.encrypt_existing_at_rest() == 0        # "[...]" placeholders left alone
+    assert _raw_at_rest(store, txid) == "[unresolved]"

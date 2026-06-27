@@ -788,6 +788,9 @@ async def handle_status(request: web.Request) -> web.Response:
         # it's currently the active chain source (electrs down). See src/pool/node_rpc.py.
         "node_rpc_enabled": config.node_rpc_enabled(),
         "node_fallback_active": bool(scheduler and getattr(scheduler, "node_fallback_active", False)),
+        # Last node health-probe result: True/False once probed, None until then.
+        # Drives the always-on "fallback ready" indicator (not just when active).
+        "node_reachable": (scheduler.node_reachable if scheduler else None),
         "upstream_host": host,
         "upstream_port": port,
         "upstream_ssl": use_ssl,

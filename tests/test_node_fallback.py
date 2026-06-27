@@ -251,6 +251,7 @@ def test_node_fallback_tick_refreshes_chain_state_from_node():
     assert store.state["current_height"] == "953900"
     assert store.state["current_mtp"] == "1700000000"
     assert s.node_fallback_active is True
+    assert s.node_reachable is True  # a successful tick proves the node is reachable
 
 
 def test_node_fallback_tick_noop_when_node_unreachable():
@@ -261,6 +262,7 @@ def test_node_fallback_tick_noop_when_node_unreachable():
     asyncio.run(s._node_fallback_tick())
     assert "current_height" not in store.state
     assert s.node_fallback_active is False
+    assert s.node_reachable is False  # unreachable node is reflected for the UI badge
 
 
 # ------------------------------------------------------- NodeRPC.from_config

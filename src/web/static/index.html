@@ -72,6 +72,12 @@
       <button class="copy-btn" onclick="copyConnectValue('connect-lan')" title="Copiar">&#128203;</button>
     </div>
 
+    <!-- Bitcoin node fallback indicator (only shown when BITCOIN_RPC is configured) -->
+    <div id="node-fallback-badge" class="node-fallback-badge" style="display:none;">
+      <span class="nfb-dot"></span>
+      <span id="node-fallback-text"></span>
+    </div>
+
     <div class="actions-bar">
       <span id="lbl-pool-actions" style="font-size:13px;color:var(--text-muted);font-weight:600">Pool:</span>
       <button id="btn-pool-export-header" onclick="openExportModal()">Exportar</button>
