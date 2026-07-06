@@ -203,6 +203,12 @@ def decrypt_passphrase(file_obj: dict, passphrase: str) -> dict:
     except (KeyError, ValueError) as e:
         raise ValueError(f"Malformed passphrase export header: {e}") from e
 
+    # KDF params come from the untrusted file. Bound them before calling scrypt:
+    # an unbounded N (e.g. 2**24) would try to allocate tens of GiB and OOM-kill
+    # the process — taking the scheduler and any pending broadcasts down with it.
+    if not (2**14 <= n <= 2**20) or not (1 <= r <= 16) or not (1 <= p <= 4) or not (16 <= dklen <= 64):
+        raise ValueError("Passphrase export KDF parameters out of accepted range")
+
     key = scrypt(passphrase.encode("utf-8"), salt, key_len=dklen, N=n, r=r, p=p)
     cipher = AES.new(key, AES.MODE_GCM, nonce=nonce)
     try:

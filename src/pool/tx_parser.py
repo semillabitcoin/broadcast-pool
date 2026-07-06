@@ -144,6 +144,12 @@ def parse_raw_tx(raw_hex: str) -> ParsedTx:
     # Locktime (4 bytes)
     locktime = struct.unpack("<I", _read_bytes(stream, 4))[0]
 
+    # A well-formed tx ends exactly here. Trailing bytes mean malformed/padded
+    # hex: for a non-segwit tx the txid is hashed over the whole input (incl. the
+    # junk) and vsize uses total_size, so both would be silently wrong. Reject.
+    if stream.tell() != total_size:
+        raise ValueError("Trailing bytes after transaction")
+
     # Calculate weight and vsize
     # weight = (total_size - witness_size - 2) * 3 + total_size
     # The -2 accounts for marker+flag bytes in segwit

@@ -59,9 +59,14 @@ def create_app(store: TxStore, proxy_server=None, scheduler=None) -> web.Applica
     middlewares = []
     if AUTH_TOKEN:
         middlewares.append(auth_middleware)
-        log.info("API auth enabled (token from APP_PASSWORD/BP_AUTH_TOKEN)")
+        log.info("API token auth enabled (BP_AUTH_TOKEN set)")
     else:
-        log.warning("API auth DISABLED — no APP_PASSWORD or BP_AUTH_TOKEN set")
+        # Honest about what actually gates the API: nothing here unless
+        # BP_AUTH_TOKEN is set. On Umbrel the dashboard sits behind app_proxy's
+        # login (PROXY_AUTH_ADD); on plain Docker/Start9 there is no such gate,
+        # so bind WEB_BIND to loopback or front it with an authenticated proxy.
+        log.warning("API token auth off (BP_AUTH_TOKEN unset) — relying on the "
+                    "front proxy (Umbrel app_proxy) for access control")
 
     app = web.Application(middlewares=middlewares, client_max_size=2 * 1024 * 1024)  # 2MB max request body
     app["store"] = store
@@ -308,7 +313,10 @@ async def handle_get_tx(request: web.Request) -> web.Response:
 async def handle_schedule(request: web.Request) -> web.Response:
     store: TxStore = request.app["store"]
     txid = request.match_info["txid"]
-    body = await request.json()
+    try:
+        body = await request.json()
+    except Exception:
+        return web.json_response({"error": "Invalid JSON"}, status=400)
     target_block = body.get("target_block")
 
     if not target_block or not isinstance(target_block, int):
@@ -559,7 +567,10 @@ async def handle_delete(request: web.Request) -> web.Response:
 async def handle_import_tx(request: web.Request) -> web.Response:
     """Import a signed transaction from raw hex pasted by the user."""
     store: TxStore = request.app["store"]
-    body = await request.json()
+    try:
+        body = await request.json()
+    except Exception:
+        return web.json_response({"error": "Invalid JSON"}, status=400)
     raw_hex = body.get("raw_hex", "").strip()
     wallet_label = body.get("wallet_label", "Manual import")
 
@@ -719,7 +730,10 @@ async def _resolve_imported_tx(store: TxStore, scheduler, txid: str, raw_hex: st
 async def handle_reorder(request: web.Request) -> web.Response:
     store: TxStore = request.app["store"]
     txid = request.match_info["txid"]
-    body = await request.json()
+    try:
+        body = await request.json()
+    except Exception:
+        return web.json_response({"error": "Invalid JSON"}, status=400)
     direction = body.get("direction", "down")
 
     if direction not in ("up", "down"):
@@ -801,7 +815,7 @@ async def handle_status(request: web.Request) -> web.Response:
         "broadcasting": len(store.get_all_txs(status="broadcasting")),
         "confirmed": len(store.get_all_txs(status="confirmed")),
         "failed": len(store.get_all_txs(status="failed")),
-        "proxy_port": config.PROXY_PORT,
+        "proxy_port": config.PROXY_PUBLIC_PORT,
         "current_price": float(store.get_state("current_price") or 0) or None,
         "price_source": store.get_state("price_source") or "",
         "liana_height_offset": int(store.get_state("liana_height_offset") or "0"),
@@ -833,7 +847,10 @@ async def handle_get_settings(request: web.Request) -> web.Response:
 async def handle_set_settings(request: web.Request) -> web.Response:
     store: TxStore = request.app["store"]
     scheduler = request.app.get("scheduler")
-    body = await request.json()
+    try:
+        body = await request.json()
+    except Exception:
+        return web.json_response({"error": "Invalid JSON"}, status=400)
 
     host = body.get("upstream_host", "").strip()
     port = body.get("upstream_port")
@@ -897,7 +914,10 @@ async def handle_resolve_inputs(request: web.Request) -> web.Response:
 
 async def handle_test_connection(request: web.Request) -> web.Response:
     """Test connection to a specific host:port (not the current upstream)."""
-    body = await request.json()
+    try:
+        body = await request.json()
+    except Exception:
+        return web.json_response({"ok": False, "error": "Invalid JSON"}, status=400)
     host = body.get("host", "").strip()
     port = body.get("port")
     use_ssl = body.get("ssl", False)
@@ -909,6 +929,13 @@ async def handle_test_connection(request: web.Request) -> web.Response:
         port = int(port)
     except (ValueError, TypeError):
         return web.json_response({"ok": False, "error": "invalid port"}, status=400)
+
+    # Same guard as set_settings: this opens an arbitrary TCP connection and
+    # returns the banner, so without it it's a port scanner / SSRF probe toward
+    # the node's RPC, other apps, or the LAN. Block loopback/link-local/docker-net.
+    verr = _validate_upstream(host, port)
+    if verr:
+        return web.json_response({"ok": False, "error": verr}, status=400)
 
     import asyncio as aio
     import json as jsonlib
@@ -1029,7 +1056,10 @@ async def handle_discover_upstreams(request: web.Request) -> web.Response:
 async def handle_set_npub(request: web.Request) -> web.Response:
     """Save npub independently from upstream settings."""
     store: TxStore = request.app["store"]
-    body = await request.json()
+    try:
+        body = await request.json()
+    except Exception:
+        return web.json_response({"error": "Invalid JSON"}, status=400)
     npub = body.get("npub", "").strip()
     clear_vault = body.get("clear_vault", False)
 
@@ -1050,7 +1080,10 @@ async def handle_set_npub(request: web.Request) -> web.Response:
 async def handle_set_preferences(request: web.Request) -> web.Response:
     """Save UI preferences (auto_schedule_locktime, etc.)."""
     store: TxStore = request.app["store"]
-    body = await request.json()
+    try:
+        body = await request.json()
+    except Exception:
+        return web.json_response({"error": "Invalid JSON"}, status=400)
 
     if "auto_schedule_locktime" in body:
         val = "true" if body["auto_schedule_locktime"] else "false"
@@ -1125,7 +1158,10 @@ async def handle_schedule_price(request: web.Request) -> web.Response:
     """Schedule a tx to broadcast when price crosses a threshold."""
     store: TxStore = request.app["store"]
     txid = request.match_info["txid"]
-    body = await request.json()
+    try:
+        body = await request.json()
+    except Exception:
+        return web.json_response({"error": "Invalid JSON"}, status=400)
 
     price = body.get("target_price")
     direction = body.get("direction", "below")
@@ -1146,6 +1182,10 @@ async def handle_schedule_price(request: web.Request) -> web.Response:
     tx = store.get_tx(txid)
     if not tx:
         return web.json_response({"error": "Transaction not found"}, status=404)
+    # Same guard as the block/MTP schedulers: only pending/scheduled txs can be
+    # (re)scheduled — without it a confirmed/failed tx could be resurrected.
+    if tx.status not in ("pending", "scheduled"):
+        return web.json_response({"error": f"Cannot schedule tx in status '{tx.status}'"}, status=400)
 
     store.update_target_price(txid, float(price), direction, expires_at=expires_at)
     log.info("Price-scheduled tx %s: %s $%.0f expires=%s", txid[:16], direction, price, expires_at or "never")

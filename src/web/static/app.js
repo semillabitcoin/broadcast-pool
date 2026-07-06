@@ -30,7 +30,7 @@ const i18n = {
     wallet: 'Wallet', import_btn: 'Importar', importing: 'Importando...',
     other: 'Otro',
     noTxTitle: 'Sin transacciones',
-    noTxDesc: 'Conecta Sparrow o Liana a umbrel.local:50005 y envia una transaccion',
+    noTxDesc: 'Conecta Sparrow o Liana a {addr} y envia una transaccion',
     thTxid: 'TxID', thType: 'Tipo', thCollection: 'Colección', thWallet: 'Label', thAmount: 'Monto',
     thFeeRate: 'Fee rate', thCoinAge: 'Edad moneda', thStatus: 'Estado',
     thTarget: 'Retransmitir en', thActions: 'Acciones', thBlock: 'Bloque',
@@ -162,7 +162,7 @@ const i18n = {
     wallet: 'Wallet', import_btn: 'Import', importing: 'Importing...',
     other: 'Other',
     noTxTitle: 'No transactions',
-    noTxDesc: 'Connect Sparrow or Liana to umbrel.local:50005 and send a transaction',
+    noTxDesc: 'Connect Sparrow or Liana to {addr} and send a transaction',
     thTxid: 'TxID', thType: 'Type', thCollection: 'Collection', thWallet: 'Label', thAmount: 'Amount',
     thFeeRate: 'Fee rate', thCoinAge: 'Coin age', thStatus: 'Status',
     thTarget: 'Broadcast at', thActions: 'Actions', thBlock: 'Block',
@@ -369,7 +369,7 @@ function applyLang() {
   document.getElementById('btn-cancel-import').textContent = t('cancel');
 
   document.getElementById('empty-title').textContent = t('noTxTitle');
-  document.getElementById('empty-desc').textContent = t('noTxDesc');
+  document.getElementById('empty-desc').textContent = t('noTxDesc').replace('{addr}', walletConnectAddr());
 
   document.getElementById('th-txid').textContent = t('thTxid');
   document.getElementById('th-collection').textContent = t('thCollection');
@@ -1949,13 +1949,23 @@ function loadConnectInfo(status) {
     return;
   }
 
-  const proxyPort = status.proxy_port || 50005;
-  const hostname = location.hostname || 'tu-nodo.local';
-  const lanAddr = hostname + ':' + proxyPort;
+  const lanAddr = walletConnectAddr();
   label.textContent = lang === 'es' ? 'Conecta tu wallet a:' : 'Connect your wallet to:';
   code.textContent = lanAddr;
   code.style.display = '';
   if (copyBtn) copyBtn.style.display = '';
+  // Keep the empty-state hint in sync with the real host:port.
+  const emptyDesc = document.getElementById('empty-desc');
+  if (emptyDesc) emptyDesc.textContent = t('noTxDesc').replace('{addr}', lanAddr);
+}
+
+// Wallet-facing proxy address: the host the dashboard was opened on + the
+// host-published proxy port (status.proxy_port = PROXY_PUBLIC_PORT), which
+// differs from the container's PROXY_PORT when remapped (the beta publishes
+// 50006:50005 to coexist with the stable app).
+function walletConnectAddr() {
+  const port = (typeof currentStatus !== 'undefined' && currentStatus && currentStatus.proxy_port) || 50005;
+  return (location.hostname || 'tu-nodo.local') + ':' + port;
 }
 
 function copyConnectValue(elementId) {

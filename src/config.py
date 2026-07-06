@@ -9,6 +9,11 @@ ELECTRUM_SSL = os.environ.get("ELECTRUM_SSL", "false").lower() in ("true", "1", 
 ELECTRUM_SSL_NOVERIFY = os.environ.get("ELECTRUM_SSL_NOVERIFY", "false").lower() in ("true", "1", "yes")
 
 PROXY_PORT = int(os.environ.get("PROXY_PORT", "50005"))
+# Host-published proxy port wallets actually connect to. Differs from PROXY_PORT
+# when the container port is remapped on the host (e.g. the beta publishes
+# 50006:50005 to coexist with the stable app). Only affects the dashboard's
+# "connect your wallet to" hint; the container still listens on PROXY_PORT.
+PROXY_PUBLIC_PORT = int(os.environ.get("PROXY_PUBLIC_PORT", os.environ.get("PROXY_PORT", "50005")))
 WEB_PORT = int(os.environ.get("WEB_PORT", "4040"))
 
 # Optional Bitcoin node RPC — fallback when the Electrum upstream (electrs) is
@@ -36,6 +41,9 @@ REBROADCAST_AFTER_MINUTES = int(os.environ.get("REBROADCAST_AFTER_MINUTES", "10"
 
 CLIENT_NAME = "broadcast-pool"
 PROTOCOL_VERSION = "1.4"
+# Version announced to wallets (server.banner / server.version) and shown in the
+# UI. Kept in one place so it stops drifting (the proxy used to hard-code v0.1.0).
+VERSION = "0.3.22"
 
 # Encryption key for scheduled txs (Umbrel injects APP_SEED automatically)
 APP_SEED = os.environ.get("APP_SEED", "")

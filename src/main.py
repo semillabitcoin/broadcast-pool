@@ -42,7 +42,13 @@ async def main():
     # Initialize database
     conn = init_db(config.DB_PATH)
     store = TxStore(conn)
-    log.info("Database initialized at %s", config.DB_PATH)
+    # Restore the last detected network from persisted state so pool queries and
+    # the node-RPC fallback operate on the right network BEFORE the scheduler
+    # connects to electrs (which is otherwise the only thing that sets it). With
+    # electrs down at boot, a testnet/signet user would otherwise see an empty
+    # pool (everything defaults to 'mainnet').
+    store.network = store.get_detected_network()
+    log.info("Database initialized at %s (network: %s)", config.DB_PATH, store.network)
     if not config.APP_SEED:
         log.warning("APP_SEED not set — transaction encryption DISABLED")
     else:
@@ -51,6 +57,9 @@ async def main():
         migrated = store.encrypt_existing_at_rest()
         if migrated:
             log.info("Encrypted %d retained tx(s) that were cleartext at rest", migrated)
+            # Truncate the WAL now so the freshly-encrypted rows' old cleartext
+            # doesn't linger in the -wal file until shutdown.
+            conn.execute("PRAGMA wal_checkpoint(TRUNCATE)")
 
     # Create components — proxy and scheduler reference each other, so wire scheduler
     # into proxy after both exist (proxy is built first because Scheduler needs it).

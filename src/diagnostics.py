@@ -17,7 +17,10 @@ from datetime import datetime, timezone
 # Order matters: longest/most specific patterns first.
 _SANITIZERS = [
     (re.compile(r"\b[0-9a-fA-F]{64}\b"), "<hash64>"),          # txid / scripthash / header hash
-    (re.compile(r"\b[0-9a-fA-F]{20,}\b"), "<hex>"),            # raw tx fragments, pubkeys
+    # Logs abbreviate txids/scripthashes with [:16] (16 hex = 8 bytes) — enough to
+    # correlate with the chain. Redact from 16 chars up, not 20, so those prefixes
+    # don't survive in the "safe to share" diagnostic report.
+    (re.compile(r"\b[0-9a-fA-F]{16,}\b"), "<hex>"),            # txid/scripthash prefixes, raw tx, pubkeys
     (re.compile(r"\b(?:bc1|tb1|bcrt1)[ac-hj-np-z02-9]{6,}\b", re.I), "<address>"),
     (re.compile(r"\b[13][a-km-zA-HJ-NP-Z1-9]{25,34}\b"), "<address>"),   # legacy base58
     (re.compile(r"\b[xyztuv]p(?:ub|rv)[1-9A-HJ-NP-Za-km-z]{20,}\b"), "<xpub>"),

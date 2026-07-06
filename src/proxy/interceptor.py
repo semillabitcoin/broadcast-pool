@@ -29,9 +29,15 @@ class Interceptor:
         self.on_fake_bump = on_fake_bump
         # Scheduler reference for post-arrival CPFP rescan. Optional (tests pass None).
         self.scheduler = scheduler
+        # Hold references to fire-and-forget broadcast tasks so they aren't
+        # garbage-collected mid-flight (asyncio only keeps weak refs).
+        self._bg_tasks: set = set()
 
     async def intercept_broadcast(self, params: list, msg_id: int) -> dict:
         """Intercept blockchain.transaction.broadcast — retain instead of forwarding."""
+        if not params or not isinstance(params, list) or not isinstance(params[0], str):
+            return {"jsonrpc": "2.0",
+                    "error": {"code": -1, "message": "Missing raw transaction"}, "id": msg_id}
         raw_hex = params[0]
 
         try:
@@ -39,6 +45,15 @@ class Interceptor:
         except Exception as e:
             log.error("Failed to parse tx: %s", e, exc_info=True)
             return {"jsonrpc": "2.0", "error": {"code": -1, "message": "Invalid transaction"}, "id": msg_id}
+
+        # Already retained? A wallet re-sending the same signed tx must not reset
+        # its schedule/collection/vault flag — save_retained_tx() is INSERT OR
+        # REPLACE, which would wipe them and CASCADE-delete resolved inputs. Just
+        # acknowledge with the txid and leave the stored record untouched.
+        if self.store.get_tx(parsed.txid):
+            log.info("Re-broadcast of already-retained tx %s — keeping existing schedule",
+                     parsed.txid[:16])
+            return {"jsonrpc": "2.0", "result": parsed.txid, "id": msg_id}
 
         # Resolve input scripthashes from upstream
         await self._resolve_inputs(parsed)
@@ -118,11 +133,20 @@ class Interceptor:
         if replaced_tx:
             self.store.update_status(replaced_tx.txid, "replaced",
                                      error=f"Replaced by {parsed.txid[:16]}...")
-            # Inherit schedule from replaced tx
+            # Inherit the replaced tx's full schedule so the replacement keeps
+            # firing on the same trigger. The price branch was missing, leaving an
+            # RBF replacement of a price-scheduled tx stuck as 'scheduled' with no
+            # trigger — a zombie that would never broadcast.
             if replaced_tx.target_block:
                 self.store.update_target_block(parsed.txid, replaced_tx.target_block)
+            elif replaced_tx.target_price is not None:
+                self.store.update_target_price(
+                    parsed.txid, replaced_tx.target_price,
+                    direction=replaced_tx.price_direction or "below",
+                    expires_at=replaced_tx.expires_at,
+                )
             elif replaced_tx.status == "scheduled":
-                # MTP-scheduled: keep new tx as scheduled too
+                # Pure timestamp/MTP schedule (no block/price trigger): keep scheduled.
                 self.store.update_status(parsed.txid, "scheduled")
             log.info("RBF detected: %s replaces %s (fee %.1f → %.1f sat/vB)",
                      parsed.txid[:16], replaced_tx.txid[:16],
@@ -186,14 +210,18 @@ class Interceptor:
                 parsed.txid[:16], parsed.locktime,
             )
             import asyncio
-            asyncio.create_task(_fire_immediate_broadcast(parsed.txid, "present/past"))
+            t = asyncio.create_task(_fire_immediate_broadcast(parsed.txid, "present/past"))
+            self._bg_tasks.add(t)
+            t.add_done_callback(self._bg_tasks.discard)
         elif category == "zero" and auto_zero:
             log.info(
                 "Retained tx %s with locktime=0 — auto-broadcast (proxy toggle ON)",
                 parsed.txid[:16],
             )
             import asyncio
-            asyncio.create_task(_fire_immediate_broadcast(parsed.txid, "locktime=0"))
+            t = asyncio.create_task(_fire_immediate_broadcast(parsed.txid, "locktime=0"))
+            self._bg_tasks.add(t)
+            t.add_done_callback(self._bg_tasks.discard)
         else:
             log.info(
                 "Retained tx %s as pending (locktime=%d, category=%s, %d sats fee, %.1f sat/vB)",

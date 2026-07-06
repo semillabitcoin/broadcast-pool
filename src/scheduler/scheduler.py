@@ -93,21 +93,27 @@ class Scheduler:
         log.info("Scheduler reconnecting to new upstream...")
         self.upstream_connected = False
         self._reconnect_event.set()
-        if self._upstream:
-            await self._upstream.close()
-            self._upstream = None
+        # Null the ref BEFORE awaiting close(): _run() may exit on the event and
+        # start() may assign a fresh upstream during this await; nulling after the
+        # await would clobber that new connection ("NoneType has no attribute call").
+        old, self._upstream = self._upstream, None
+        if old:
+            await old.close()
 
     async def broadcast_now(self, txid: str) -> dict:
         """Immediately broadcast a retained transaction. Returns result dict."""
         tx = self.store.get_tx(txid)
         if not tx:
             return {"error": "Transaction not found"}
+        # Status first: the policy gate can flip a tx to 'expired' as a side
+        # effect, so checking it before the status guard could mislabel an
+        # already-confirmed/failed tx as expired.
+        if tx.status not in ("pending", "scheduled"):
+            return {"error": f"Cannot broadcast tx in status '{tx.status}'"}
         # Shared pre-broadcast gate (expiry + locktime), fail-closed.
         err = self._check_broadcast_policy(tx)
         if err:
             return {"error": err}
-        if tx.status not in ("pending", "scheduled"):
-            return {"error": f"Cannot broadcast tx in status '{tx.status}'"}
 
         if self._upstream is None and self._node is None:
             return {"error": "Not connected to upstream"}
@@ -130,10 +136,8 @@ class Scheduler:
             try:
                 exp = datetime.fromisoformat(tx.expires_at.replace("Z", "+00:00"))
                 if exp.tzinfo is None:
-                    now = datetime.utcnow()
-                else:
-                    now = datetime.now(timezone.utc)
-                if now >= exp:
+                    exp = exp.replace(tzinfo=timezone.utc)
+                if datetime.now(timezone.utc) >= exp:
                     self.store.update_status(tx.txid, "expired")
                     return "Transaction expired — cannot broadcast"
             except Exception as e:
@@ -274,30 +278,48 @@ class Scheduler:
 
     async def _price_poller(self) -> None:
         """Poll price source every 30s and store current price."""
+        # Anti-spike: a single reading >15% off the accepted price is treated as
+        # a possible oracle glitch and held. But a SUSTAINED move must be accepted
+        # — otherwise a real crash/pump (the emergency-collateral case) would
+        # freeze the trigger forever against a stale price. So we accept once
+        # CONFIRMATIONS consecutive readings agree with each other.
+        SPIKE = 0.15
+        CONFIRMATIONS = 3
+        pending_level: float | None = None
+        pending_count = 0
         while self._running:
             try:
                 source = self.store.get_state("price_source") or ""
-                if not source:
-                    await asyncio.sleep(30)
-                    continue
-
-                price = await self._fetch_price(source)
-                if price and price > 0:
-                    if self._current_price and abs(price - self._current_price) / self._current_price > 0.15:
-                        log.warning("Price spike rejected: $%.0f -> $%.0f (%.1f%%)",
-                                    self._current_price, price,
-                                    abs(price - self._current_price) / self._current_price * 100)
-                    else:
-                        self._current_price = price
-                        self.store.set_state("current_price", str(price))
-                # Check expiry on every poll cycle (independent of blocks)
+                if source:
+                    price = await self._fetch_price(source)
+                    if price and price > 0:
+                        cur = self._current_price
+                        if cur and abs(price - cur) / cur > SPIKE:
+                            if pending_level and abs(price - pending_level) / pending_level <= SPIKE:
+                                pending_count += 1
+                            else:
+                                pending_level, pending_count = price, 1
+                            if pending_count >= CONFIRMATIONS:
+                                log.warning("Sustained price move accepted: $%.0f -> $%.0f",
+                                            cur, price)
+                                self._current_price = price
+                                self.store.set_state("current_price", str(price))
+                                pending_level, pending_count = None, 0
+                            else:
+                                log.warning("Price spike held (%d/%d): $%.0f -> $%.0f",
+                                            pending_count, CONFIRMATIONS, cur, price)
+                        else:
+                            self._current_price = price
+                            self.store.set_state("current_price", str(price))
+                            pending_level, pending_count = None, 0
+                # Expiry check runs every cycle, with or without a price source.
+                # Kept INSIDE the try so a transient store error can't kill the
+                # poller (which would silently stop price polling AND expiry).
                 self._purge_expired_txs()
             except asyncio.CancelledError:
                 break
             except Exception as e:
                 log.debug("Price poll error: %s", e)
-            # Also check expiry even without price source
-            self._purge_expired_txs()
             await asyncio.sleep(30)
 
     async def _fetch_price(self, source: str) -> float | None:
@@ -354,6 +376,10 @@ class Scheduler:
         info = await self._node.health()
         self.node_reachable = bool(info)
         if not info:
+            # Node stopped responding. If it had been acting as the fallback
+            # (electrs also down), clear the flag so the UI shows red
+            # "unavailable" instead of a stale amber "active".
+            self.node_fallback_active = False
             return
         height = info.get("blocks")
         mtp = info.get("mediantime")  # the node's mediantime IS the tip's MTP (BIP-113)
@@ -406,7 +432,7 @@ class Scheduler:
 
     def _purge_expired_txs(self) -> None:
         """Mark price-scheduled txs as expired when their expiry has passed."""
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
         with self.store._lock:
             rows = self.store._conn.execute(
                 """SELECT txid, expires_at FROM retained_txs
@@ -418,8 +444,8 @@ class Scheduler:
             for r in rows:
                 try:
                     exp = datetime.fromisoformat(r["expires_at"].replace("Z", "+00:00"))
-                    if exp.tzinfo is not None:
-                        exp = exp.replace(tzinfo=None)
+                    if exp.tzinfo is None:
+                        exp = exp.replace(tzinfo=timezone.utc)
                 except Exception:
                     continue
                 if now >= exp:
@@ -575,14 +601,33 @@ class Scheduler:
             + self.store.get_all_txs(status="failed")
         )
 
+        # Reorg guard: re-verify recently-confirmed txs are still on-chain. A
+        # shallow reorg can orphan one inside the purge window (PURGE_AFTER_BLOCKS
+        # defaults to 1), which would otherwise purge its signed raw_hex and leave
+        # a phantom confirmation. Only txs within a few blocks of the tip are
+        # re-checked, so deep/settled confirmations aren't re-queried every block.
+        current_height = self.store.get_current_height() or 0
+        for tx in self.store.get_all_txs(status="confirmed"):
+            if tx.confirmed_block and current_height and 0 <= (current_height - tx.confirmed_block) <= 3:
+                height = await self._confirmation_height(tx)
+                if height is None:
+                    self.store.update_status(tx.txid, "broadcasting",
+                                             error="Reorg: confirmation dropped, re-verifying")
+                    self.store.update_broadcast_time(tx.txid)  # fresh watchdog window
+                    to_check.append(self.store.get_tx(tx.txid))
+                    log.warning("Reorg: tx %s no longer confirmed at %d — reverted to broadcasting",
+                                tx.txid[:16], tx.confirmed_block)
+
         # Watchdog: txs stuck in broadcasting > 60 min without confirmation → mark failed
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
         for tx in to_check:
+            if tx is None:
+                continue
             if tx.status == "broadcasting" and tx.broadcast_at:
                 try:
                     bcast = datetime.fromisoformat(tx.broadcast_at.replace("Z", "+00:00"))
-                    if bcast.tzinfo is not None:
-                        bcast = bcast.replace(tzinfo=None)
+                    if bcast.tzinfo is None:
+                        bcast = bcast.replace(tzinfo=timezone.utc)
                     if (now - bcast).total_seconds() > 3600:
                         self.store.update_status(
                             tx.txid, "failed",
@@ -611,7 +656,9 @@ class Scheduler:
         """
         # 1) electrs via scripthash history
         if self._upstream is not None:
-            sh = next(iter(self.store.get_scripthashes_for_tx(tx.txid)), None)
+            # Skip the empty scripthash (unresolved inputs contribute "") so we
+            # don't fall through to the node just because "" was picked first.
+            sh = next((s for s in self.store.get_scripthashes_for_tx(tx.txid) if s), None)
             if sh:
                 try:
                     resp = await self._upstream.call(
@@ -655,7 +702,7 @@ class Scheduler:
     async def _rebroadcast_stuck(self) -> None:
         """Rebroadcast txs that fell out of mempool."""
         broadcasting = self.store.get_all_txs(status="broadcasting")
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
 
         for tx in broadcasting:
             if not tx.broadcast_at:
@@ -664,6 +711,8 @@ class Scheduler:
                 broadcast_time = datetime.fromisoformat(tx.broadcast_at)
             except ValueError:
                 continue
+            if broadcast_time.tzinfo is None:  # DB stores naive UTC
+                broadcast_time = broadcast_time.replace(tzinfo=timezone.utc)
 
             if now - broadcast_time > timedelta(minutes=config.REBROADCAST_AFTER_MINUTES):
                 log.info("Rebroadcasting stuck tx %s", tx.txid[:16])

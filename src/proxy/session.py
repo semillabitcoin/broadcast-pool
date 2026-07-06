@@ -64,6 +64,14 @@ class ElectrumSession:
 
             backoff = 1
             while not self._closed:
+                # If the wallet gave up and disconnected while electrs is down,
+                # stop retrying: otherwise the session lingers with an abandoned
+                # client socket for the whole outage, and reconnecting wallets
+                # pile up leaked sessions/FDs. at_eof() is set by the transport
+                # when the peer closes, so this needs no read (no data consumed).
+                if self.client_reader.at_eof():
+                    log.info("[%s] Client disconnected during upstream connect retry", self.peer_str)
+                    return
                 try:
                     await self.upstream.connect()
                     backoff = 1
@@ -304,7 +312,7 @@ class ElectrumSession:
                 "    ##",
                 " #####",
                 "",
-                " Broadcast Pool v0.1.0",
+                f" Broadcast Pool v{config.VERSION}",
                 " by Semilla Bitcoin",
                 "",
                 " An Electrum proxy to schedule",
@@ -441,7 +449,7 @@ class ElectrumSession:
                 # Replace server name, keep protocol version
                 result = msg.get("result", [])
                 if isinstance(result, list) and len(result) >= 2:
-                    msg["result"] = ["Broadcast Pool v0.1.0 (Semilla Bitcoin)", result[1]]
+                    msg["result"] = [f"Broadcast Pool v{config.VERSION} (Semilla Bitcoin)", result[1]]
             elif method == "blockchain.headers.subscribe":
                 # Liana height-offset: rebuild fake chain from real tip and return fake tip
                 result = msg.get("result", {})

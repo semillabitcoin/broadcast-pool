@@ -1,7 +1,7 @@
 """Virtual mempool — injects retained txs into Electrum responses."""
 
 from src.pool.store import TxStore, RetainedTx, RetainedOutput
-from src.pool.status_hash import compute_status_hash
+from src.pool.status_hash import compute_status_hash, sort_history
 
 
 class VirtualMempool:
@@ -22,7 +22,10 @@ class VirtualMempool:
                     entry["fee"] = tx.fee_sats
                 history.append(entry)
 
-        return history
+        # Return in Electrum status order so the get_history response and the
+        # status_hash notification agree (a recomputing wallet must land on the
+        # same hash). Same key compute_status_hash uses.
+        return sort_history(history)
 
     def filter_listunspent(self, utxos: list[dict], scripthash: str) -> list[dict]:
         """Remove spent UTXOs and add new outputs from retained txs."""
