@@ -117,6 +117,7 @@ const i18n = {
     btnCancel: 'Cancelar', btnDownload: 'Descargar', btnAnalyze: 'Analizar', btnImport: 'Importar',
     importModalTitle: 'Importar pool',
     importModalHelp: 'Selecciona un archivo .bp o .jsonl exportado anteriormente.',
+    importRestoreSchedule: 'Restaurar las condiciones de retransmisión (precio / bloque / fecha)',
     importPassphrasePlaceholder: 'Passphrase del archivo',
     importNip44Help: 'Archivo cifrado NIP-44 \u2014 se requiere extensi\u00f3n NIP-07 (Alby/nos2x) para descifrar.',
     importPassphraseMismatch: 'Las passphrases no coinciden',
@@ -248,6 +249,7 @@ const i18n = {
     btnCancel: 'Cancel', btnDownload: 'Download', btnAnalyze: 'Analyze', btnImport: 'Import',
     importModalTitle: 'Import pool',
     importModalHelp: 'Pick a .bp or .jsonl file you exported before.',
+    importRestoreSchedule: 'Restore rebroadcast conditions (price / block / date)',
     importPassphrasePlaceholder: 'File passphrase',
     importNip44Help: 'NIP-44 encrypted file — you need a NIP-07 extension (Alby/nos2x) to decrypt.',
     importPassphraseMismatch: 'Passphrases do not match',
@@ -2619,6 +2621,7 @@ function applyExportImportI18n() {
   setText('import-apply-submit', 'btnImport');
   setText('import-conflicts-title', 'importConflictsTitle');
   setText('import-conflicts-note', 'importConflictsNote');
+  setText('import-restore-schedule-label', 'importRestoreSchedule');
   document.getElementById('import-passphrase').placeholder = t('importPassphrasePlaceholder');
 }
 
@@ -2850,6 +2853,9 @@ async function doImportApply() {
     const planBody = JSON.parse(submitBtn.dataset.planBody || '{}');
     // Phase 1: skip every conflicting tx automatically (no wizard yet)
     planBody.resolutions = {};
+    // Toggle: restore each tx's recorded rebroadcast conditions, or import pending.
+    const restoreEl = document.getElementById('import-restore-schedule');
+    planBody.restore_schedule = restoreEl ? restoreEl.checked : true;
     // We don't know which were conflicts here without re-running plan; the server
     // will refuse and tell us if any blocking conflict remains. The simpler path:
     // ask for "skip-all-conflicts" by re-running plan on the server and marking them.

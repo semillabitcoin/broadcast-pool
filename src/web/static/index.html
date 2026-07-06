@@ -467,6 +467,10 @@
           <div id="import-conflicts-list" class="input-mono" style="margin-top:var(--space-2);font-size:11px"></div>
           <p class="form-note" id="import-conflicts-note" style="margin-top:var(--space-2)">Fase 1 no permite resolver conflictos UTXO. Salta esas txs en otra exportación o limpia el pool antes de importar.</p>
         </div>
+        <label style="display:flex;align-items:center;gap:8px;font-size:13px;color:var(--text-muted);margin-top:var(--space-2)">
+          <input type="checkbox" id="import-restore-schedule" checked>
+          <span id="import-restore-schedule-label">Restaurar las condiciones de retransmisión (precio / bloque / fecha)</span>
+        </label>
         <div class="modal-card-actions">
           <button class="small secondary" onclick="closePoolModal()" id="import-review-cancel">Cancelar</button>
           <button class="small" onclick="doImportApply()" id="import-apply-submit">Importar</button>

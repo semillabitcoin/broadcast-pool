@@ -1611,8 +1611,11 @@ async def handle_pool_import_apply(request: web.Request) -> web.Response:
     Body: same shape as import-plan, plus:
       - resolutions: { <imported_txid>: "skip" | "add" | "replace" }
         (Phase 2 will use this; Phase 1 only honors "skip" — conflicts force a 409 otherwise.)
+      - restore_schedule: bool (default true) — re-apply each tx's recorded
+        rebroadcast conditions (price/block/MTP + expiry). false → import pending.
 
-    All imported txs are written with status='pending' regardless of their original status.
+    Txs are saved as 'pending', then (unless restore_schedule is false) moved back
+    to their recorded schedule.
     """
     from src.pool.tx_parser import parse_raw_tx
 
@@ -1633,6 +1636,11 @@ async def handle_pool_import_apply(request: web.Request) -> web.Response:
     resolutions = body.get("resolutions") or {}
     if not isinstance(resolutions, dict):
         return web.json_response({"error": "resolutions must be an object"}, status=400)
+
+    # Re-apply each tx's recorded rebroadcast conditions (target price/block/MTP,
+    # expiry) by default. Set restore_schedule=false to import everything as
+    # pending and set the conditions again by hand.
+    restore_schedule = body.get("restore_schedule", True)
 
     # First pass: re-build the plan to validate conflicts haven't drifted since import-plan
     parsed_cache: dict[str, tuple] = {}
@@ -1698,19 +1706,29 @@ async def handle_pool_import_apply(request: web.Request) -> web.Response:
             dep = entry.get("depends_on")
             if dep and store.get_tx(dep):
                 store.set_depends_on(parsed.txid, dep)
-            # Auto-schedule by nLockTime if user has the pref on (consistent with
-            # the single-tx import path). Falls through to 'pending' if locktime
-            # isn't in the future.
-            auto_scheduled = False
-            if store.get_state("auto_schedule_locktime") != "false":
-                res = _auto_schedule_by_locktime(store, parsed.txid)
-                auto_scheduled = bool(res.get("scheduled"))
-            # If nLockTime didn't schedule, fall back to the target_block recorded
-            # in the export (user explicitly scheduled it at a different height).
-            if not auto_scheduled:
-                target_block = entry.get("target_block")
-                if target_block:
-                    store.update_target_block(parsed.txid, int(target_block), keep_status=True)
+            # Restore the recorded rebroadcast schedule unless the user chose to
+            # ignore it (restore_schedule=false → import as pending, set by hand).
+            # A price trigger takes precedence over a block trigger; if neither was
+            # recorded (or they're ignored), fall back to auto-scheduling by the
+            # tx's own nLockTime — same as a fresh single-tx import. A timestamp
+            # (MTP) schedule is intrinsic to the locktime, so that path covers it.
+            restored = False
+            if restore_schedule:
+                if entry.get("target_price") is not None:
+                    store.update_target_price(
+                        parsed.txid, float(entry["target_price"]),
+                        direction=(entry.get("price_direction") or "below"),
+                        expires_at=entry.get("expires_at"),
+                    )
+                    restored = True
+                elif entry.get("target_block"):
+                    # No keep_status: actually move it to 'scheduled' so the block
+                    # trigger is live (the old fallback left it 'pending' with an
+                    # inert target_block that the UI showed as if scheduled).
+                    store.update_target_block(parsed.txid, int(entry["target_block"]))
+                    restored = True
+            if not restored and store.get_state("auto_schedule_locktime") != "false":
+                _auto_schedule_by_locktime(store, parsed.txid)
             added += 1
         except Exception as e:
             log.error("Failed to import tx %s: %s", txid[:16], e, exc_info=True)
