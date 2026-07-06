@@ -436,18 +436,23 @@ class TxStore:
             self._conn.commit()
 
     def update_target_block(self, txid: str, target_block: int, keep_status: bool = False) -> None:
+        # Setting a block trigger clears any price trigger (and its expiry) so a
+        # tx can't be scheduled by two conflicting triggers at once. Mirrors
+        # handle_unschedule's cleanup.
         with self._lock:
             if keep_status:
                 self._conn.execute(
                     """UPDATE retained_txs
-                       SET target_block = ?, updated_at = datetime('now')
+                       SET target_block = ?, target_price = NULL, price_direction = NULL,
+                           expires_at = NULL, updated_at = datetime('now')
                        WHERE txid = ?""",
                     (target_block, txid),
                 )
             else:
                 self._conn.execute(
                     """UPDATE retained_txs
-                       SET target_block = ?, status = 'scheduled', updated_at = datetime('now')
+                       SET target_block = ?, target_price = NULL, price_direction = NULL,
+                           expires_at = NULL, status = 'scheduled', updated_at = datetime('now')
                        WHERE txid = ?""",
                     (target_block, txid),
                 )
@@ -455,11 +460,13 @@ class TxStore:
             self._conn.commit()
 
     def update_target_price(self, txid: str, price: float, direction: str = "below", expires_at: str | None = None) -> None:
+        # Setting a price trigger clears any block trigger, symmetric with
+        # update_target_block, so the two paths can't both fire on one tx.
         with self._lock:
             self._conn.execute(
                 """UPDATE retained_txs
                    SET target_price = ?, price_direction = ?, expires_at = ?,
-                       status = 'scheduled', updated_at = datetime('now')
+                       target_block = NULL, status = 'scheduled', updated_at = datetime('now')
                    WHERE txid = ?""",
                 (price, direction, expires_at, txid),
             )

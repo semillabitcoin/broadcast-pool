@@ -38,6 +38,14 @@ class UpstreamConnection:
         self._notification_callback = None
         self._passthrough_callback = None  # For forwarding non-internal responses
         self._read_task: asyncio.Task | None = None
+        # Notifications and passthrough responses are handed off to this queue and
+        # run by _dispatch_loop, OFF the read loop. Their callbacks may issue their
+        # own upstream .call() (status-hash recompute, MTP fetch); running them
+        # inline in the read loop would suspend it awaiting a response the same
+        # suspended loop can never deliver → deadlock. Single FIFO worker keeps
+        # upstream message order intact.
+        self._dispatch_queue: asyncio.Queue | None = None
+        self._dispatch_task: asyncio.Task | None = None
         # Set when the read loop dies (EOF/error): new call()s fail fast
         # instead of burning their full timeout against a dead socket.
         self._dead = False
@@ -55,13 +63,17 @@ class UpstreamConnection:
         self._reader, self._writer = await asyncio.open_connection(
             self.host, self.port, ssl=ssl_ctx, limit=2**20
         )
+        self._dispatch_queue = asyncio.Queue()
         self._read_task = asyncio.create_task(self._read_loop())
+        self._dispatch_task = asyncio.create_task(self._dispatch_loop())
         proto = "SSL" if self.use_ssl else "TCP"
         log.info("Connected to upstream %s:%d (%s)", self.host, self.port, proto)
 
     async def close(self) -> None:
         if self._read_task:
             self._read_task.cancel()
+        if self._dispatch_task:
+            self._dispatch_task.cancel()
         if self._writer:
             self._writer.close()
             try:
@@ -156,8 +168,10 @@ class UpstreamConnection:
                 elif msg_method is not None:
                     log.debug("<< upstream [notification] %s params=%s",
                               msg_method, str(msg.get("params", ""))[:80])
-                    if self._notification_callback:
-                        await self._notification_callback(msg)
+                    if self._notification_callback and self._dispatch_queue is not None:
+                        # Off-load to the dispatch worker so the read loop stays free
+                        # to deliver the .call() responses these callbacks await.
+                        self._dispatch_queue.put_nowait(("notification", msg))
 
                 # 3. Response to a client-forwarded request (low ID range) — passthrough
                 elif msg_id is not None and self._passthrough_callback:
@@ -165,7 +179,8 @@ class UpstreamConnection:
                               msg_id,
                               len(str(msg.get("result", ""))),
                               str(msg.get("error", ""))[:60] if "error" in msg else "none")
-                    await self._passthrough_callback(msg)
+                    if self._dispatch_queue is not None:
+                        self._dispatch_queue.put_nowait(("passthrough", msg))
 
                 else:
                     log.warning("<< upstream [unrouted] id=%s method=%s keys=%s",
@@ -183,6 +198,36 @@ class UpstreamConnection:
             # away instead of letting each one burn its full timeout — the
             # scheduler keepalive detects the disconnect on the next ping.
             self._fail_pending(ConnectionError("upstream closed connection"))
+
+    async def _dispatch_loop(self) -> None:
+        """Run notification/passthrough callbacks off the read loop, in FIFO order.
+
+        Kept separate from _read_loop so a callback that awaits its own
+        upstream .call() can't stall message routing: the read loop keeps
+        delivering that call()'s response while this worker is suspended on it.
+        Order between notifications and client responses is preserved (single
+        worker, one queue); internal call() responses are still routed inline
+        by the read loop and carry no ordering relation to client-facing traffic.
+        """
+        queue = self._dispatch_queue
+        if queue is None:
+            return
+        try:
+            while True:
+                kind, msg = await queue.get()
+                try:
+                    if kind == "notification":
+                        if self._notification_callback:
+                            await self._notification_callback(msg)
+                    else:  # "passthrough"
+                        if self._passthrough_callback:
+                            await self._passthrough_callback(msg)
+                except asyncio.CancelledError:
+                    raise
+                except Exception as e:
+                    log.warning("Upstream dispatch callback error (%s): %s", kind, e)
+        except asyncio.CancelledError:
+            pass
 
     def _fail_pending(self, exc: Exception) -> None:
         for future in self._pending.values():

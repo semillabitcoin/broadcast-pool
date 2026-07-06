@@ -159,44 +159,55 @@ class Scheduler:
         """Main scheduler loop."""
         host, port, use_ssl = self.store.get_upstream()
         self._upstream = UpstreamConnection(host, port, use_ssl=use_ssl)
-        await self._upstream.connect()
+        try:
+            await self._upstream.connect()
 
-        # Handshake
-        await self._upstream.call("server.version", [config.CLIENT_NAME, config.PROTOCOL_VERSION])
+            # Handshake
+            await self._upstream.call("server.version", [config.CLIENT_NAME, config.PROTOCOL_VERSION])
 
-        # Detect network via genesis_hash
-        await self._detect_network()
+            # Detect network via genesis_hash
+            await self._detect_network()
 
-        # Subscribe to new blocks
-        resp = await self._upstream.call("blockchain.headers.subscribe", [])
-        if "result" in resp:
-            height = resp["result"]["height"]
-            self.store.set_state("current_height", str(height))
-            log.info("Scheduler synced at block %d", height)
-            self.upstream_connected = True
-            await self._on_new_block(height)
+            # Subscribe to new blocks
+            resp = await self._upstream.call("blockchain.headers.subscribe", [])
+            if "result" in resp:
+                height = resp["result"]["height"]
+                self.store.set_state("current_height", str(height))
+                log.info("Scheduler synced at block %d", height)
+                self.upstream_connected = True
+                await self._on_new_block(height)
 
-        # Set up notification handler for new blocks
-        self._upstream.set_notification_callback(self._handle_notification)
+            # Set up notification handler for new blocks
+            self._upstream.set_notification_callback(self._handle_notification)
 
-        # Keep alive — break immediately on reconnect request
-        self._reconnect_event.clear()
-        while self._running:
-            try:
-                await asyncio.wait_for(self._reconnect_event.wait(), timeout=30)
-                break  # Reconnect requested
-            except asyncio.TimeoutError:
-                pass  # Normal timeout, do ping
-            # reconnect() may have nulled the upstream between the event wait
-            # and this ping (race seen in the field as "'NoneType' object has
-            # no attribute 'call'") — grab a local ref and bail out cleanly.
-            upstream = self._upstream
-            if upstream is None:
-                break
-            try:
-                await upstream.call("server.ping")
-            except Exception:
-                break
+            # Keep alive — break immediately on reconnect request
+            self._reconnect_event.clear()
+            while self._running:
+                try:
+                    await asyncio.wait_for(self._reconnect_event.wait(), timeout=30)
+                    break  # Reconnect requested
+                except asyncio.TimeoutError:
+                    pass  # Normal timeout, do ping
+                # reconnect() may have nulled the upstream between the event wait
+                # and this ping (race seen in the field as "'NoneType' object has
+                # no attribute 'call'") — grab a local ref and bail out cleanly.
+                upstream = self._upstream
+                if upstream is None:
+                    break
+                try:
+                    await upstream.call("server.ping")
+                except Exception:
+                    break
+        finally:
+            # Always tear down THIS connection on any exit (error, reconnect,
+            # stop). Otherwise the old read/dispatch tasks keep running and stay
+            # subscribed to headers → every future block is processed twice and a
+            # new zombie connection accumulates per reconnect. reconnect() may
+            # have already closed+nulled it; only close if it's still ours.
+            up = self._upstream
+            self._upstream = None
+            if up is not None:
+                await up.close()
 
     async def _handle_notification(self, msg: dict) -> None:
         method = msg.get("method", "")
@@ -735,6 +746,13 @@ class Scheduler:
         scheduled = self.store.get_all_txs(status="scheduled")
         for tx in scheduled:
             try:
+                # Only txs scheduled purely by their timestamp locktime are due
+                # here. A tx with an explicit block or price trigger must wait for
+                # THAT trigger even if its MTP-locktime already passed — otherwise
+                # a price-scheduled ciclado would fire the moment MTP crosses its
+                # locktime, ignoring the price the user set.
+                if tx.target_block is not None or tx.target_price is not None:
+                    continue
                 raw = self.store.get_raw_hex(tx.txid)
                 if not raw or raw.startswith("["):
                     continue
@@ -874,7 +892,13 @@ class Scheduler:
                     resp = await self._upstream.call(
                         "blockchain.scripthash.listunspent", [inp.scripthash]
                     )
-                    utxos = resp.get("result", [])
+                    # A JSON-RPC error (or missing result) means electrs couldn't
+                    # answer (overload, history-too-large). That is UNKNOWN, not
+                    # "spent": treating it as spent abandons the tx, and the next
+                    # purge deletes its signed raw_hex irrecoverably. Skip instead.
+                    if "error" in resp or "result" not in resp:
+                        continue
+                    utxos = resp.get("result") or []
                     still_available = any(
                         u["tx_hash"] == inp.prev_txid and u["tx_pos"] == inp.prev_vout
                         for u in utxos
